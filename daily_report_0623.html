@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>南京分公司日维度播报（T-1: 06/23）</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+var charts = {};
+var archData = {};
+function initChart(id, labels, d0, d1, d2, d3) {
+    var ctx = document.getElementById(id);
+    if (!ctx) return;
+    charts[id] = new Chart(ctx.getContext('2d'), {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [
+                { label: '\u8ba2\u5355', data: d0, borderColor: '#2E4B7A', backgroundColor: 'rgba(46,75,122,0.05)', yAxisID: 'y', tension: 0.3, pointRadius: 2, borderWidth: 1.5 },
+                { label: '\u53ef\u7528\u8f66', data: d1, borderColor: '#375623', backgroundColor: 'rgba(55,86,35,0.05)', yAxisID: 'y', tension: 0.3, pointRadius: 2, borderWidth: 1.5 },
+                { label: '3+\u95f2\u7f6e\u7387', data: d2, borderColor: '#C55A11', backgroundColor: 'rgba(197,90,17,0.05)', yAxisID: 'y2', tension: 0.3, pointRadius: 2, borderWidth: 1.5 },
+                { label: '\u51fa\u5355\u7387', data: d3, borderColor: '#7030A0', backgroundColor: 'rgba(112,48,160,0.05)', yAxisID: 'y2', tension: 0.3, pointRadius: 2, borderWidth: 1.5 }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: { legend: { display: false }, tooltip: { bodyFont: { size: 11 }, titleFont: { size: 11 } } },
+            scales: {
+                x: { ticks: { font: { size: 10 }, maxTicksLimit: 10 } },
+                y: { position: 'left', ticks: { font: { size: 10 } }, title: { display: true, text: '\u6570\u91cf', font: { size: 10 } } },
+                y2: { position: 'right', ticks: { font: { size: 10 }, callback: function(v) { return v + '%'; } }, title: { display: true, text: '\u6bd4\u7387', font: { size: 10 } }, grid: { drawOnChartArea: false } }
+            }
+        }
+    });
+}
+function toggleLine(chartId, idx, btn) {
+    var c = charts[chartId];
+    if (!c) return;
+    var m = c.getDatasetMeta(idx);
+    m.hidden = !m.hidden;
+    btn.classList.toggle('active');
+    c.update();
+}
+function togglePerson(id) {
+    var body = document.getElementById(id);
+    var btn = document.getElementById('btn-' + id);
+    if (!body) return;
+    body.classList.toggle('open');
+    if (btn) btn.textContent = body.classList.contains('open') ? '\u25BC \u6536\u8d77' : '\u25B6 \u5c55\u5f00';
+}
+function initArchChart(id, labels, nj0,nj1,nj2,nj3, bk0,bk1,bk2,bk3, eb0,eb1,eb2,eb3) {
+    archData[id] = {
+        labels: labels,
+        nj:[nj0,nj1,nj2,nj3], bk:[bk0,bk1,bk2,bk3], eb:[eb0,eb1,eb2,eb3],
+        metric: 'order', hidden: [false,false,false]
+    };
+    _buildArchChart(id);
+}
+function _buildArchChart(id) {
+    var d = archData[id];
+    var mi = {order:0,avail:1,idle:2,rate:3}[d.metric];
+    var isRate = (d.metric==='idle'||d.metric==='rate');
+    var yLabel = isRate ? '\u6bd4\u7387(%)' : '\u6570\u91cf';
+    var colors = ['#2E4B7A','#C55A11','#375623'];
+    var names  = ['\u5357\u4eac\u5206\u516c\u53f8','\u5355\u8f66','\u52a9\u529b\u8f66'];
+    var datasets = [d.nj,d.bk,d.eb].map(function(src,i){
+        return {
+            label: names[i],
+            data: src[mi],
+            borderColor: colors[i],
+            backgroundColor: colors[i].replace(')',',0.07)').replace('rgb','rgba'),
+            tension: 0.3, pointRadius: 2, borderWidth: 1.8,
+            hidden: d.hidden[i]
+        };
+    });
+    var ctx = document.getElementById(id);
+    if (!ctx) return;
+    if (charts[id]) charts[id].destroy();
+    charts[id] = new Chart(ctx.getContext('2d'), {
+        type: 'line',
+        data: { labels: d.labels, datasets: datasets },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                legend: { display: true, position: 'top', labels: { font:{size:11}, boxWidth:12 } },
+                tooltip: { bodyFont:{size:11}, titleFont:{size:11},
+                    callbacks: { label: function(ctx){ return ctx.dataset.label+': '+(isRate?ctx.parsed.y.toFixed(1)+'%':ctx.parsed.y.toLocaleString()); } }
+                }
+            },
+            scales: {
+                x: { ticks: { font:{size:10}, maxTicksLimit:10 } },
+                y: { ticks: { font:{size:10}, callback: function(v){ return isRate?v+'%':v.toLocaleString(); } },
+                     title: { display:true, text:yLabel, font:{size:10} } }
+            }
+        }
+    });
+}
+function switchMetric(id, metric, btn) {
+    archData[id].metric = metric;
+    var btns = btn.parentElement.querySelectorAll('.filter-btn');
+    btns.forEach(function(b){ if(['order','avail','idle','rate'].some(function(m){return b.getAttribute('onclick')&&b.getAttribute('onclick').indexOf("'"+m+"'")>-1;})) b.classList.remove('active'); });
+    btn.classList.add('active');
+    _buildArchChart(id);
+}
+function toggleArchLine(id, idx, btn) {
+    archData[id].hidden[idx] = !archData[id].hidden[idx];
+    btn.classList.toggle('active');
+    _buildArchChart(id);
+}
+</script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Microsoft YaHei', Arial, sans-serif; background: #f0f4f8; color: #1a2744; font-size: 13px; }
+.page-header { background: linear-gradient(135deg, #1F3864, #2E4B7A); color: #fff; padding: 14px 24px; }
+.page-header h1 { font-size: 18px; font-weight: bold; }
+.page-header .sub { font-size: 11px; color: #aac4e8; margin-top: 3px; }
+.container { max-width: 1200px; margin: 0 auto; padding: 12px; }
+.card { background: #fff; border-radius: 6px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); overflow: hidden; }
+.card-title { background: linear-gradient(135deg, #1F3864, #2E4B7A); color: #fff; padding: 8px 16px; font-size: 13px; font-weight: bold; }
+.card-body { padding: 10px 14px; }
+.broadcast-box { border-left: 3px solid #2E4B7A; padding: 8px 12px; margin-bottom: 10px; background: #f8fafc; font-size: 12px; line-height: 1.7; border-radius: 0 4px 4px 0; }
+.chart-wrap { margin-bottom: 8px; }
+.chart-filters { display: flex; gap: 6px; margin-bottom: 6px; flex-wrap: wrap; }
+.filter-btn { padding: 3px 10px; border: 1px solid #2E4B7A; border-radius: 3px; cursor: pointer; font-size: 11px; background: #f0f4f8; color: #2E4B7A; transition: all 0.15s; }
+.filter-btn.active { background: #2E4B7A; color: #fff; }
+.filter-btn:hover { background: #1F3864; color: #fff; }
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 11px; }
+thead th { background: #1F3864; color: #fff; padding: 6px 8px; text-align: center; white-space: nowrap; position: sticky; top: 0; z-index: 2; }
+tbody td { padding: 5px 8px; text-align: center; border-bottom: 1px solid #e8edf3; white-space: nowrap; }
+tbody td:first-child { text-align: left; }
+tr.summary-row td { background: #D9E1F2; font-weight: bold; }
+tr.sub-summary-row td { background: #EEF3FA; font-weight: bold; }
+tr:hover td { background: #e8f0fe !important; }
+.person-header { display: flex; align-items: center; justify-content: space-between; background: #2E4B7A; color: white; padding: 7px 12px; font-size: 12px; font-weight: bold; border-radius: 4px 4px 0 0; cursor: pointer; margin-top: 6px; }
+.person-header:hover { background: #1F3864; }
+.toggle-btn { font-size: 10px; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.4); color: white; padding: 2px 8px; border-radius: 3px; cursor: pointer; }
+.person-body { display: none; padding: 8px; background: #f8fafc; border: 1px solid #dde3ed; border-top: none; border-radius: 0 0 4px 4px; }
+.person-body.open { display: block; }
+.back-top { position: fixed; bottom: 24px; right: 24px; background: #2E4B7A; color: #fff; border: none; border-radius: 50%; width: 38px; height: 38px; font-size: 18px; cursor: pointer; box-shadow: 0 2px 6px rgba(0,0,0,0.25); z-index: 999; }
+.sub-title { background: #2E4B7A; color: #fff; padding: 6px 14px; font-size: 12px; font-weight: bold; margin-top: 6px; }
+</style>
+</head>
+<body>
+<div class="page-header">
+  <h1>南京分公司日维度播报（T-1: 6月23日）</h1>
+  <div class="sub">数据日期：T-1 = 2026-06-23 &nbsp;|&nbsp; T-2 = 2026-06-22 &nbsp;|&nbsp; 生成时间：2026-06-24 10:55</div>
+</div>
+<div class="container">
+
+<!-- Section 1: 架构汇总 -->
+<div class="card">
+  <div class="card-title">📊 架构汇总</div>
+  <div class="card-body">
+    <div class="broadcast-box">T-1(4/26): 订单 <strong>251,107</strong> (<span style="color:#C00000">↑86,369</span> vs T-2)，可用车 <strong>82925.0</strong> (<span style="color:#375623">↑499.0</span>)，3+闲置率 <strong>16.3%</strong> (<span style="color:#375623">↓0.7pp</span>)，出单率 <strong>66.7%</strong> (<span style="color:#375623">↑13.5pp</span>)</div>
+    <div class="chart-filters" style="flex-wrap:wrap;gap:4px">
+  <span style="font-size:11px;color:#666;align-self:center;margin-right:4px">指标：</span>
+  <button class="filter-btn active" onclick="switchMetric('chart_nj','order',this)">订单</button>
+  <button class="filter-btn" onclick="switchMetric('chart_nj','avail',this)">可用车</button>
+  <button class="filter-btn" onclick="switchMetric('chart_nj','idle',this)">3+闲置率</button>
+  <button class="filter-btn" onclick="switchMetric('chart_nj','rate',this)">出单率</button>
+  <span style="font-size:11px;color:#ccc;margin:0 4px">|</span>
+  <span style="font-size:11px;color:#666;align-self:center;margin-right:4px">架构：</span>
+  <button class="filter-btn active" onclick="toggleArchLine('chart_nj',0,this)">南京分公司</button>
+  <button class="filter-btn active" onclick="toggleArchLine('chart_nj',1,this)">单车</button>
+  <button class="filter-btn active" onclick="toggleArchLine('chart_nj',2,this)">助力车</button>
+</div>
+<div class="chart-wrap"><canvas id="chart_nj" style="height:200px"></canvas></div>
+<script>
+initArchChart('chart_nj',
+  ["06/01", "06/02", "06/03", "06/04", "06/05", "06/06", "06/07", "06/08", "06/09", "06/10", "06/11", "06/12", "06/13", "06/14", "06/15", "06/16", "06/17", "06/18", "06/19", "06/20", "06/21", "06/22", "06/23"],
+  [446817, 445649, 449907, 449331, 452340, 367904, 326943, 393032, 412925, 419173, 425872, 438135, 389832, 374709, 421326, 441419, 442162, 426854, 97525, 293737, 223798, 164738, 251107],[114781.0, 114790.0, 113799.0, 110627.0, 101650.0, 88312.0, 83411.0, 83273.0, 82781.0, 83501.0, 83224.0, 81830.0, 81714.0, 81581.0, 78930.0, 80129.0, 81873.0, 81309.0, 81031.0, 81327.0, 81930.0, 82426.0, 82925.0],[13.3, 13.0, 12.7, 13.5, 14.2, 15.4, 15.5, 15.0, 13.4, 11.9, 11.3, 11.0, 11.2, 11.4, 11.3, 10.5, 10.1, 10.4, 12.8, 13.6, 19.7, 17.0, 16.3],[72.1, 72.2, 72.7, 73.6, 77.5, 73.7, 68.3, 73.1, 76.1, 77.2, 78.8, 80.6, 75.7, 73.7, 77.9, 79.6, 80.0, 79.9, 40.1, 66.0, 61.8, 53.3, 66.7],
+  [349457, 349633, 350378, 351036, 351904, 266510, 240185, 300507, 315424, 319522, 326096, 333938, 292710, 273990, 334584, 349679, 347763, 338132, 72027, 230773, 172870, 119744, 202980],[100036.0, 100054.0, 99109.0, 95931.0, 86927.0, 73609.0, 68807.0, 68413.0, 67905.0, 68501.0, 68253.0, 66645.0, 66609.0, 66507.0, 67399.0, 68681.0, 70440.0, 70148.0, 70012.0, 70227.0, 70807.0, 71225.0, 71636.0],[14.7, 14.4, 14.0, 15.1, 16.0, 17.8, 18.1, 17.7, 15.7, 13.8, 13.0, 13.0, 13.1, 13.5, 12.9, 11.9, 11.5, 11.8, 14.4, 15.4, 21.5, 19.0, 18.1],[70.1, 70.3, 70.8, 71.7, 75.8, 71.5, 65.3, 70.6, 73.8, 75.3, 77.0, 78.6, 73.1, 70.9, 75.9, 77.6, 78.2, 78.3, 37.8, 64.4, 59.7, 49.8, 64.9],
+  [97360, 96016, 99529, 98295, 100436, 101394, 86758, 92525, 97501, 99651, 99776, 104197, 97122, 100719, 86742, 91740, 94399, 88722, 25498, 62964, 50928, 44994, 48127],[14745.0, 14736.0, 14690.0, 14696.0, 14723.0, 14703.0, 14604.0, 14860.0, 14876.0, 15000.0, 14971.0, 15185.0, 15105.0, 15074.0, 11531.0, 11448.0, 11433.0, 11161.0, 11019.0, 11100.0, 11123.0, 11201.0, 11289.0],[3.7, 3.9, 3.6, 3.5, 3.1, 3.5, 3.2, 3.0, 2.8, 3.0, 3.1, 2.1, 2.4, 2.4, 1.9, 1.9, 1.5, 1.6, 2.9, 2.6, 8.2, 4.2, 5.0],[85.6, 85.5, 85.6, 86.1, 87.4, 84.9, 82.7, 84.8, 86.6, 86.2, 86.9, 89.0, 87.1, 86.3, 89.7, 91.3, 91.1, 89.8, 55.1, 76.3, 75.0, 75.0, 78.5]
+);
+</script>
+    <div class="table-wrap"><table><thead><tr><th>组织</th><th>T-1订单</th><th>T-2订单</th><th>订单变化</th><th>T-1可用车</th><th>T-2可用车</th><th>可用车变化</th><th>T-1翻台</th><th>T-2翻台</th><th>翻台变化</th><th>T-1 3+闲置率</th><th>T-2 3+闲置率</th><th>闲置率变化(pp)</th><th>T-1出单率</th><th>T-2出单率</th><th>出单率变化(pp)</th><th>T-1失联</th><th>T-2失联</th><th>失联变化</th><th>T-1超区</th><th>T-2超区</th><th>超区变化</th><th>T-1故障</th><th>T-2故障</th><th>故障变化</th></tr></thead><tbody><tr class="summary-row"><td style="text-align:left">南京分公司（汇总）</td><td>251,107</td><td>164,738</td><td style="color:#375623;font-weight:bold">+86,369</td><td>82925.0</td><td>82426.0</td><td style="color:#375623;font-weight:bold">+499.0</td><td>3.03</td><td>2.00</td><td style="color:#375623;font-weight:bold">+1.03</td><td>16.3%</td><td>17.0%</td><td style="color:#375623;font-weight:bold">-0.7</td><td>66.7%</td><td>53.3%</td><td style="color:#375623;font-weight:bold">+13.5</td><td>1,160</td><td>1,179</td><td style="color:#375623;font-weight:bold">-19</td><td>789</td><td>928</td><td style="color:#375623;font-weight:bold">-139</td><td>406</td><td>470</td><td style="color:#375623;font-weight:bold">-64</td></tr><tr class=""><td style="text-align:left">　单车</td><td>202,980</td><td>119,744</td><td style="color:#375623;font-weight:bold">+83,236</td><td>71636.0</td><td>71225.0</td><td style="color:#375623;font-weight:bold">+411.0</td><td>2.83</td><td>1.68</td><td style="color:#375623;font-weight:bold">+1.15</td><td>18.1%</td><td>19.0%</td><td style="color:#375623;font-weight:bold">-1.0</td><td>64.9%</td><td>49.8%</td><td style="color:#375623;font-weight:bold">+15.1</td><td>1,154</td><td>1,148</td><td style="color:#C00000;font-weight:bold">+6</td><td>785</td><td>916</td><td style="color:#375623;font-weight:bold">-131</td><td>400</td><td>457</td><td style="color:#375623;font-weight:bold">-57</td></tr><tr class=""><td style="text-align:left">　　六合区</td><td>0</td><td>0</td><td>+0</td><td>15.0</td><td>15.0</td><td>+0.0</td><td>0.00</td><td>0.00</td><td>+0.00</td><td>80.0%</td><td>80.0%</td><td>+0.0</td><td>0.0%</td><td>0.0%</td><td>+0.0</td><td>55</td><td>55</td><td>+0</td><td>58</td><td>58</td><td>+0</td><td>3</td><td>3</td><td>+0</td></tr><tr class=""><td style="text-align:left">　　建邺区</td><td>16,007</td><td>9,356</td><td style="color:#375623;font-weight:bold">+6,651</td><td>7109.0</td><td>6834.0</td><td style="color:#375623;font-weight:bold">+275.0</td><td>2.25</td><td>1.37</td><td style="color:#375623;font-weight:bold">+0.88</td><td>19.7%</td><td>19.4%</td><td style="color:#C00000;font-weight:bold">+0.3</td><td>64.1%</td><td>49.1%</td><td style="color:#375623;font-weight:bold">+15.0</td><td>33</td><td>32</td><td style="color:#C00000;font-weight:bold">+1</td><td>13</td><td>12</td><td style="color:#C00000;font-weight:bold">+1</td><td>4</td><td>3</td><td style="color:#C00000;font-weight:bold">+1</td></tr><tr class=""><td style="text-align:left">　　栖霞区</td><td>42,260</td><td>21,247</td><td style="color:#375623;font-weight:bold">+21,013</td><td>12374.0</td><td>12673.0</td><td style="color:#C00000;font-weight:bold">-299.0</td><td>3.42</td><td>1.68</td><td style="color:#375623;font-weight:bold">+1.74</td><td>12.8%</td><td>15.2%</td><td style="color:#375623;font-weight:bold">-2.5</td><td>73.2%</td><td>51.2%</td><td style="color:#375623;font-weight:bold">+22.0</td><td>245</td><td>244</td><td style="color:#C00000;font-weight:bold">+1</td><td>142</td><td>207</td><td style="color:#375623;font-weight:bold">-65</td><td>70</td><td>78</td><td style="color:#375623;font-weight:bold">-8</td></tr><tr class=""><td style="text-align:left">　　江北新区</td><td>20,602</td><td>9,900</td><td style="color:#375623;font-weight:bold">+10,702</td><td>8402.0</td><td>7827.0</td><td style="color:#375623;font-weight:bold">+575.0</td><td>2.45</td><td>1.26</td><td style="color:#375623;font-weight:bold">+1.19</td><td>20.1%</td><td>22.9%</td><td style="color:#375623;font-weight:bold">-2.7</td><td>66.4%</td><td>48.1%</td><td style="color:#375623;font-weight:bold">+18.4</td><td>202</td><td>201</td><td style="color:#C00000;font-weight:bold">+1</td><td>161</td><td>158</td><td style="color:#C00000;font-weight:bold">+3</td><td>81</td><td>94</td><td style="color:#375623;font-weight:bold">-13</td></tr><tr class=""><td style="text-align:left">　　江宁区</td><td>20,643</td><td>20,364</td><td style="color:#375623;font-weight:bold">+279</td><td>10682.0</td><td>10676.0</td><td style="color:#375623;font-weight:bold">+6.0</td><td>1.93</td><td>1.91</td><td style="color:#375623;font-weight:bold">+0.02</td><td>19.8%</td><td>19.5%</td><td style="color:#C00000;font-weight:bold">+0.3</td><td>58.6%</td><td>53.4%</td><td style="color:#375623;font-weight:bold">+5.2</td><td>322</td><td>316</td><td style="color:#C00000;font-weight:bold">+6</td><td>288</td><td>312</td><td style="color:#375623;font-weight:bold">-24</td><td>82</td><td>87</td><td style="color:#375623;font-weight:bold">-5</td></tr><tr class=""><td style="text-align:left">　　浦口区</td><td>1,350</td><td>714</td><td style="color:#375623;font-weight:bold">+636</td><td>807.0</td><td>825.0</td><td style="color:#C00000;font-weight:bold">-18.0</td><td>1.67</td><td>0.87</td><td style="color:#375623;font-weight:bold">+0.80</td><td>14.3%</td><td>13.0%</td><td style="color:#C00000;font-weight:bold">+1.3</td><td>58.4%</td><td>45.9%</td><td style="color:#375623;font-weight:bold">+12.4</td><td>6</td><td>5</td><td style="color:#C00000;font-weight:bold">+1</td><td>2</td><td>2</td><td>+0</td><td>11</td><td>13</td><td style="color:#375623;font-weight:bold">-2</td></tr><tr class=""><td style="text-align:left">　　溧水区</td><td>840</td><td>2,517</td><td style="color:#C00000;font-weight:bold">-1,677</td><td>1222.0</td><td>1220.0</td><td style="color:#375623;font-weight:bold">+2.0</td><td>0.69</td><td>2.06</td><td style="color:#C00000;font-weight:bold">-1.37</td><td>29.5%</td><td>13.6%</td><td style="color:#C00000;font-weight:bold">+15.9</td><td>27.3%</td><td>51.2%</td><td style="color:#C00000;font-weight:bold">-24.0</td><td>9</td><td>9</td><td>+0</td><td>9</td><td>9</td><td>+0</td><td>22</td><td>22</td><td>+0</td></tr><tr class=""><td style="text-align:left">　　玄武区</td><td>41,758</td><td>20,924</td><td style="color:#375623;font-weight:bold">+20,834</td><td>10401.0</td><td>10238.0</td><td style="color:#375623;font-weight:bold">+163.0</td><td>4.01</td><td>2.04</td><td style="color:#375623;font-weight:bold">+1.97</td><td>12.1%</td><td>16.5%</td><td style="color:#375623;font-weight:bold">-4.4</td><td>73.0%</td><td>50.1%</td><td style="color:#375623;font-weight:bold">+22.9</td><td>86</td><td>86</td><td>+0</td><td>41</td><td>74</td><td style="color:#375623;font-weight:bold">-33</td><td>42</td><td>44</td><td style="color:#375623;font-weight:bold">-2</td></tr><tr class=""><td style="text-align:left">　　秦淮区</td><td>28,005</td><td>16,517</td><td style="color:#375623;font-weight:bold">+11,488</td><td>7891.0</td><td>8124.0</td><td style="color:#C00000;font-weight:bold">-233.0</td><td>3.55</td><td>2.03</td><td style="color:#375623;font-weight:bold">+1.52</td><td>13.5%</td><td>12.6%</td><td style="color:#C00000;font-weight:bold">+1.0</td><td>69.9%</td><td>56.2%</td><td style="color:#375623;font-weight:bold">+13.6</td><td>54</td><td>54</td><td>+0</td><td>8</td><td>9</td><td style="color:#375623;font-weight:bold">-1</td><td>26</td><td>33</td><td style="color:#375623;font-weight:bold">-7</td></tr><tr class=""><td style="text-align:left">　　雨花台区</td><td>3,297</td><td>2,201</td><td style="color:#375623;font-weight:bold">+1,096</td><td>2367.0</td><td>2219.0</td><td style="color:#375623;font-weight:bold">+148.0</td><td>1.39</td><td>0.99</td><td style="color:#375623;font-weight:bold">+0.40</td><td>36.4%</td><td>38.7%</td><td style="color:#375623;font-weight:bold">-2.3</td><td>46.6%</td><td>35.8%</td><td style="color:#375623;font-weight:bold">+10.9</td><td>85</td><td>90</td><td style="color:#375623;font-weight:bold">-5</td><td>62</td><td>74</td><td style="color:#375623;font-weight:bold">-12</td><td>35</td><td>36</td><td style="color:#375623;font-weight:bold">-1</td></tr><tr class=""><td style="text-align:left">　　高淳区</td><td>670</td><td>2,763</td><td style="color:#C00000;font-weight:bold">-2,093</td><td>472.0</td><td>472.0</td><td>+0.0</td><td>1.42</td><td>5.85</td><td style="color:#C00000;font-weight:bold">-4.43</td><td>10.2%</td><td>1.9%</td><td style="color:#C00000;font-weight:bold">+8.3</td><td>38.1%</td><td>83.7%</td><td style="color:#C00000;font-weight:bold">-45.6</td><td>4</td><td>4</td><td>+0</td><td>0</td><td>0</td><td>+0</td><td>5</td><td>5</td><td>+0</td></tr><tr class=""><td style="text-align:left">　　鼓楼区</td><td>27,548</td><td>13,241</td><td style="color:#375623;font-weight:bold">+14,307</td><td>9894.0</td><td>10102.0</td><td style="color:#C00000;font-weight:bold">-208.0</td><td>2.78</td><td>1.31</td><td style="color:#375623;font-weight:bold">+1.47</td><td>24.6%</td><td>25.4%</td><td style="color:#375623;font-weight:bold">-0.8</td><td>59.0%</td><td>42.6%</td><td style="color:#375623;font-weight:bold">+16.4</td><td>53</td><td>52</td><td style="color:#C00000;font-weight:bold">+1</td><td>1</td><td>1</td><td>+0</td><td>19</td><td>39</td><td style="color:#375623;font-weight:bold">-20</td></tr><tr class="sub-summary-row"><td style="text-align:left">　助力车（汇总）</td><td>48,127</td><td>44,994</td><td style="color:#375623;font-weight:bold">+3,133</td><td>11289.0</td><td>11201.0</td><td style="color:#375623;font-weight:bold">+88.0</td><td>4.26</td><td>4.02</td><td style="color:#375623;font-weight:bold">+0.24</td><td>5.0%</td><td>4.2%</td><td style="color:#C00000;font-weight:bold">+0.9</td><td>78.5%</td><td>75.0%</td><td style="color:#375623;font-weight:bold">+3.5</td><td>6</td><td>31</td><td style="color:#375623;font-weight:bold">-25</td><td>4</td><td>12</td><td style="color:#375623;font-weight:bold">-8</td><td>6</td><td>13</td><td style="color:#375623;font-weight:bold">-7</td></tr><tr class=""><td style="text-align:left">　　助力车-南京市</td><td>30,232</td><td>29,762</td><td style="color:#375623;font-weight:bold">+470</td><td>5347.0</td><td>5338.0</td><td style="color:#375623;font-weight:bold">+9.0</td><td>5.65</td><td>5.58</td><td style="color:#375623;font-weight:bold">+0.07</td><td>4.2%</td><td>3.3%</td><td style="color:#C00000;font-weight:bold">+0.9</td><td>87.6%</td><td>84.1%</td><td style="color:#375623;font-weight:bold">+3.4</td><td>0</td><td>0</td><td>+0</td><td>2</td><td>1</td><td style="color:#C00000;font-weight:bold">+1</td><td>3</td><td>1</td><td style="color:#C00000;font-weight:bold">+2</td></tr><tr class=""><td style="text-align:left">　　助力车-江宁区</td><td>13,635</td><td>13,752</td><td style="color:#C00000;font-weight:bold">-117</td><td>5030.0</td><td>5114.0</td><td style="color:#C00000;font-weight:bold">-84.0</td><td>2.71</td><td>2.69</td><td style="color:#375623;font-weight:bold">+0.02</td><td>6.8%</td><td>5.7%</td><td style="color:#C00000;font-weight:bold">+1.1</td><td>69.1%</td><td>67.6%</td><td style="color:#375623;font-weight:bold">+1.5</td><td>5</td><td>30</td><td style="color:#375623;font-weight:bold">-25</td><td>1</td><td>11</td><td style="color:#375623;font-weight:bold">-10</td><td>3</td><td>12</td><td style="color:#375623;font-weight:bold">-9</td></tr><tr class=""><td style="text-align:left">　　助力车-玄武区</td><td>4,260</td><td>1,480</td><td style="color:#375623;font-weight:bold">+2,780</td><td>912.0</td><td>749.0</td><td style="color:#375623;font-weight:bold">+163.0</td><td>4.67</td><td>1.98</td><td style="color:#375623;font-weight:bold">+2.69</td><td>0.1%</td><td>0.1%</td><td style="color:#375623;font-weight:bold">-0.0</td><td>77.4%</td><td>61.0%</td><td style="color:#375623;font-weight:bold">+16.4</td><td>1</td><td>1</td><td>+0</td><td>1</td><td>0</td><td style="color:#C00000;font-weight:bold">+1</td><td>0</td><td>0</td><td>+0</td></tr></tbody></table></div>
+  </div>
+</div>
+
+<!-- Section 2: 助力车分区 -->
+<div class="card">
+  <div class="card-title">🛵 助力车分区详情</div>
+  <div class="card-body">
+    <div class="sub-title">助力车-南京市</div>
+    <div class="broadcast-box">T-1(4/26): 订单 <strong>30,232</strong> (<span style="color:#C00000">↑470</span> vs T-2)，可用车 <strong>5347.0</strong> (<span style="color:#375623">↑9.0</span>)，3+闲置率 <strong>4.2%</strong> (<span style="color:#C00000">↑0.9pp</span>)，出单率 <strong>87.6%</strong> (<span style="color:#375623">↑3.4pp</span>)</div>
+    <div class="chart-filters">
+  <button class="filter-btn active" onclick="toggleLine('chart_ebike_njs',0,this)">订单</button>
+  <button class="filter-btn active" onclick="toggleLine('chart_ebike_njs',1,this)">可用车</button>
+  <button class="filter-btn active" onclick="toggleLine('chart_ebike_njs',2,this)">3+闲置率</button>
+  <button class="filter-btn active" onclick="toggleLine('chart_ebike_njs',3,this)">出单率</button>
+</div>
+<div class="chart-wrap"><canvas id="chart_ebike_njs" style="height:180px"></canvas></div>
+<script>initChart('chart_ebike_njs',["06/01", "06/02", "06/03", "06/04", "06/05", "06/06", "06/07", "06/08", "06/09", "06/10", "06/11", "06/12", "06/13", "06/14", "06/15", "06/16", "06/17", "06/18", "06/19", "06/20", "06/21", "06/22", "06/23"],[52581, 52968, 55714, 55944, 52114, 48104, 36404, 51047, 53584, 56049, 55004, 54129, 38769, 44216, 51637, 53055, 55876, 52086, 12251, 26969, 24019, 29762, 30232],[5054.0, 5079.0, 5134.0, 5157.0, 5156.0, 5142.0, 5152.0, 5221.0, 5271.0, 5349.0, 5346.0, 5351.0, 5335.0, 5338.0, 5350.0, 5341.0, 5346.0, 5343.0, 5321.0, 5331.0, 5324.0, 5338.0, 5347.0],[0.6, 0.5, 0.4, 0.5, 0.4, 0.3, 0.5, 0.6, 0.5, 0.6, 0.4, 0.9, 1.1, 0.8, 0.6, 0.5, 0.5, 0.5, 1.6, 1.8, 11.2, 3.3, 4.2],[96.8, 96.1, 95.5, 96.1, 97.2, 92.5, 87.2, 95.6, 95.8, 96.1, 95.1, 95.0, 89.9, 90.3, 95.1, 95.2, 95.2, 94.0, 49.3, 72.1, 72.3, 84.1, 87.6]);</script>
+    <div class="sub-title" style="margin-top:10px">助力车-江宁区</div>
+    <div class="broadcast-box">T-1(4/26): 订单 <strong>13,635</strong> (<span style="color:#375623">↓117</span> vs T-2)，可用车 <strong>5030.0</strong> (<span style="color:#C00000">↓84.0</span>)，3+闲置率 <strong>6.8%</strong> (<span style="color:#C00000">↑1.1pp</span>)，出单率 <strong>69.1%</strong> (<span style="color:#375623">↑1.5pp</span>)</div>
+    <div class="chart-filters">
+  <button class="filter-btn active" onclick="toggleLine('chart_ebike_jny',0,this)">订单</button>
+  <button class="filter-btn active" onclick="toggleLine('chart_ebike_jny',1,this)">可用车</button>
+  <button class="filter-btn active" onclick="toggleLine('chart_ebike_jny',2,this)">3+闲置率</button>
+  <button class="filter-btn active" onclick="toggleLine('chart_ebike_jny',3,this)">出单率</button>
+</div>
+<div class="chart-wrap"><canvas id="chart_ebike_jny" style="height:180px"></canvas></div>
+<script>initChart('chart_ebike_jny',["06/01", "06/02", "06/03", "06/04", "06/05", "06/06", "06/07", "06/08", "06/09", "06/10", "06/11", "06/12", "06/13", "06/14", "06/15", "06/16", "06/17", "06/18", "06/19", "06/20", "06/21", "06/22", "06/23"],[40112, 38781, 39661, 38583, 44491, 43530, 39622, 36707, 38561, 40024, 40540, 44324, 46654, 43657, 25227, 25647, 27235, 26940, 10468, 22639, 18404, 13752, 13635],[8523.0, 8475.0, 8383.0, 8361.0, 8393.0, 8406.0, 8327.0, 8461.0, 8432.0, 8475.0, 8461.0, 8667.0, 8625.0, 8586.0, 5105.0, 5062.0, 5096.0, 5052.0, 4965.0, 5090.0, 5059.0, 5114.0, 5030.0],[5.9, 6.4, 6.0, 5.8, 5.3, 5.9, 5.2, 4.8, 4.6, 4.9, 4.1, 3.1, 3.4, 3.7, 3.8, 3.7, 2.8, 2.9, 4.8, 3.8, 6.1, 5.7, 6.8],[81.5, 81.9, 82.1, 82.1, 84.0, 79.9, 79.2, 79.7, 81.4, 82.4, 83.4, 86.4, 84.6, 82.3, 83.8, 85.5, 85.3, 84.2, 58.4, 78.3, 74.7, 67.6, 69.1]);</script>
+    <div class="sub-title" style="margin-top:10px">助力车-玄武区</div>
+    <div class="broadcast-box">T-1(4/26): 订单 <strong>4,260</strong> (<span style="color:#C00000">↑2,780</span> vs T-2)，可用车 <strong>912.0</strong> (<span style="color:#375623">↑163.0</span>)，3+闲置率 <strong>0.1%</strong> (<span style="color:#375623">↓0.0pp</span>)，出单率 <strong>77.4%</strong> (<span style="color:#375623">↑16.4pp</span>)</div>
+    <div class="chart-filters">
+  <button class="filter-btn active" onclick="toggleLine('chart_ebike_xwq',0,this)">订单</button>
+  <button class="filter-btn active" onclick="toggleLine('chart_ebike_xwq',1,this)">可用车</button>
+  <button class="filter-btn active" onclick="toggleLine('chart_ebike_xwq',2,this)">3+闲置率</button>
+  <button class="filter-btn active" onclick="toggleLine('chart_ebike_xwq',3,this)">出单率</button>
+</div>
+<div class="chart-wrap"><canvas id="chart_ebike_xwq" style="height:180px"></canvas></div>
+<script>initChart('chart_ebike_xwq',["06/01", "06/02", "06/03", "06/04", "06/05", "06/06", "06/07", "06/08", "06/09", "06/10", "06/11", "06/12", "06/13", "06/14", "06/15", "06/16", "06/17", "06/18", "06/19", "06/20", "06/21", "06/22", "06/23"],[4667, 4267, 4154, 3768, 3831, 9760, 10732, 4771, 5356, 3578, 4232, 5744, 11699, 12846, 9878, 13038, 11288, 9696, 2779, 13356, 8505, 1480, 4260],[1168.0, 1182.0, 1173.0, 1178.0, 1174.0, 1155.0, 1125.0, 1178.0, 1173.0, 1176.0, 1164.0, 1167.0, 1145.0, 1150.0, 1076.0, 1045.0, 991.0, 766.0, 733.0, 679.0, 740.0, 749.0, 912.0],[0.3, 0.5, 0.1, 0.3, 0.0, 0.2, 0.0, 0.0, 0.1, 0.0, 7.9, 0.3, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.3, 1.2, 0.1, 0.1],[67.6, 65.5, 67.4, 70.6, 68.9, 88.0, 88.4, 73.8, 83.1, 69.0, 74.9, 80.7, 92.9, 97.4, 91.3, 99.0, 98.0, 97.3, 74.5, 94.3, 96.5, 61.0, 77.4]);</script>
+  </div>
+</div>
+
+<!-- Section 3: 责任人维度 -->
+<div class="card">
+  <div class="card-title">👤 责任人维度（点击展开）</div>
+  <div class="card-body">
+
+    <div class="sub-title">🚲 单车责任人</div>
+    <div class="table-wrap"><table><thead><tr><th>责任人</th><th>T-1订单</th><th>T-2订单</th><th>订单变化</th><th>T-1可用车</th><th>T-2可用车</th><th>可用车变化</th><th>T-1翻台</th><th>T-2翻台</th><th>翻台变化</th><th>T-1 3+闲置率</th><th>T-2 3+闲置率</th><th>闲置率变化(pp)</th><th>T-1出单率</th><th>T-2出单率</th><th>出单率变化(pp)</th><th>T-1失联</th><th>T-2失联</th><th>失联变化</th><th>T-1超区</th><th>T-2超区</th><th>超区变化</th><th>T-1故障</th><th>T-2故障</th><th>故障变化</th></tr></thead><tbody><tr><td style="text-align:left">桂超</td><td>35,584</td><td>22,207</td><td style="color:#375623;font-weight:bold">+13,377</td><td>7842.0</td><td>8216.0</td><td style="color:#C00000;font-weight:bold">-374.0</td><td>4.54</td><td>2.70</td><td style="color:#375623;font-weight:bold">+1.84</td><td>9.1%</td><td>8.8%</td><td style="color:#C00000;font-weight:bold">+0.3</td><td>73.0%</td><td>60.2%</td><td style="color:#375623;font-weight:bold">+12.7</td><td>29</td><td>30</td><td style="color:#375623;font-weight:bold">-1</td><td>10</td><td>10</td><td>+0</td><td>41</td><td>47</td><td style="color:#375623;font-weight:bold">-6</td></tr><tr><td style="text-align:left">林杜鹏</td><td>28,005</td><td>16,517</td><td style="color:#375623;font-weight:bold">+11,488</td><td>7891.0</td><td>8124.0</td><td style="color:#C00000;font-weight:bold">-233.0</td><td>3.55</td><td>2.03</td><td style="color:#375623;font-weight:bold">+1.52</td><td>13.5%</td><td>12.6%</td><td style="color:#C00000;font-weight:bold">+1.0</td><td>69.9%</td><td>56.2%</td><td style="color:#375623;font-weight:bold">+13.6</td><td>54</td><td>54</td><td>+0</td><td>8</td><td>9</td><td style="color:#375623;font-weight:bold">-1</td><td>26</td><td>33</td><td style="color:#375623;font-weight:bold">-7</td></tr><tr><td style="text-align:left">刘明</td><td>19,543</td><td>19,386</td><td style="color:#375623;font-weight:bold">+157</td><td>9519.0</td><td>9506.0</td><td style="color:#375623;font-weight:bold">+13.0</td><td>2.05</td><td>2.04</td><td style="color:#375623;font-weight:bold">+0.01</td><td>17.2%</td><td>17.1%</td><td style="color:#C00000;font-weight:bold">+0.1</td><td>61.1%</td><td>55.5%</td><td style="color:#375623;font-weight:bold">+5.6</td><td>169</td><td>165</td><td style="color:#C00000;font-weight:bold">+4</td><td>139</td><td>152</td><td style="color:#375623;font-weight:bold">-13</td><td>48</td><td>49</td><td style="color:#375623;font-weight:bold">-1</td></tr><tr><td style="text-align:left">许永青</td><td>17,327</td><td>9,556</td><td style="color:#375623;font-weight:bold">+7,771</td><td>6509.0</td><td>6602.0</td><td style="color:#C00000;font-weight:bold">-93.0</td><td>2.66</td><td>1.45</td><td style="color:#375623;font-weight:bold">+1.21</td><td>21.8%</td><td>22.3%</td><td style="color:#375623;font-weight:bold">-0.4</td><td>61.5%</td><td>46.1%</td><td style="color:#375623;font-weight:bold">+15.4</td><td>31</td><td>30</td><td style="color:#C00000;font-weight:bold">+1</td><td>13</td><td>12</td><td style="color:#C00000;font-weight:bold">+1</td><td>7</td><td>9</td><td style="color:#375623;font-weight:bold">-2</td></tr><tr><td style="text-align:left">于继坤</td><td>16,240</td><td>7,435</td><td style="color:#375623;font-weight:bold">+8,805</td><td>6857.0</td><td>6858.0</td><td style="color:#C00000;font-weight:bold">-1.0</td><td>2.37</td><td>1.08</td><td style="color:#375623;font-weight:bold">+1.29</td><td>27.8%</td><td>28.1%</td><td style="color:#375623;font-weight:bold">-0.3</td><td>55.4%</td><td>38.9%</td><td style="color:#375623;font-weight:bold">+16.5</td><td>48</td><td>47</td><td style="color:#C00000;font-weight:bold">+1</td><td>1</td><td>1</td><td>+0</td><td>16</td><td>31</td><td style="color:#375623;font-weight:bold">-15</td></tr><tr><td style="text-align:left">胡锐</td><td>15,946</td><td>8,132</td><td style="color:#375623;font-weight:bold">+7,814</td><td>3870.0</td><td>3718.0</td><td style="color:#375623;font-weight:bold">+152.0</td><td>4.12</td><td>2.19</td><td style="color:#375623;font-weight:bold">+1.93</td><td>10.7%</td><td>11.9%</td><td style="color:#375623;font-weight:bold">-1.3</td><td>69.8%</td><td>50.5%</td><td style="color:#375623;font-weight:bold">+19.3</td><td>19</td><td>19</td><td>+0</td><td>3</td><td>47</td><td style="color:#375623;font-weight:bold">-44</td><td>8</td><td>9</td><td style="color:#375623;font-weight:bold">-1</td></tr><tr><td style="text-align:left">张书军</td><td>15,231</td><td>7,353</td><td style="color:#375623;font-weight:bold">+7,878</td><td>6000.0</td><td>5470.0</td><td style="color:#375623;font-weight:bold">+530.0</td><td>2.54</td><td>1.34</td><td style="color:#375623;font-weight:bold">+1.20</td><td>16.4%</td><td>19.6%</td><td style="color:#375623;font-weight:bold">-3.1</td><td>70.3%</td><td>51.0%</td><td style="color:#375623;font-weight:bold">+19.4</td><td>136</td><td>136</td><td>+0</td><td>85</td><td>83</td><td style="color:#C00000;font-weight:bold">+2</td><td>40</td><td>53</td><td style="color:#375623;font-weight:bold">-13</td></tr><tr><td style="text-align:left">杨志伟</td><td>13,652</td><td>7,018</td><td style="color:#375623;font-weight:bold">+6,634</td><td>5257.0</td><td>5071.0</td><td style="color:#375623;font-weight:bold">+186.0</td><td>2.60</td><td>1.38</td><td style="color:#375623;font-weight:bold">+1.22</td><td>16.1%</td><td>20.1%</td><td style="color:#375623;font-weight:bold">-4.0</td><td>69.5%</td><td>44.5%</td><td style="color:#375623;font-weight:bold">+25.0</td><td>176</td><td>175</td><td style="color:#C00000;font-weight:bold">+1</td><td>110</td><td>143</td><td style="color:#375623;font-weight:bold">-33</td><td>41</td><td>46</td><td style="color:#375623;font-weight:bold">-5</td></tr><tr><td style="text-align:left">郭富荣</td><td>12,653</td><td>5,827</td><td style="color:#375623;font-weight:bold">+6,826</td><td>4317.0</td><td>4436.0</td><td style="color:#C00000;font-weight:bold">-119.0</td><td>2.93</td><td>1.31</td><td style="color:#375623;font-weight:bold">+1.62</td><td>16.6%</td><td>19.9%</td><td style="color:#375623;font-weight:bold">-3.3</td><td>69.4%</td><td>47.1%</td><td style="color:#375623;font-weight:bold">+22.3</td><td>65</td><td>64</td><td style="color:#C00000;font-weight:bold">+1</td><td>29</td><td>62</td><td style="color:#375623;font-weight:bold">-33</td><td>19</td><td>20</td><td style="color:#375623;font-weight:bold">-1</td></tr><tr><td style="text-align:left">张晨阳</td><td>9,988</td><td>5,606</td><td style="color:#375623;font-weight:bold">+4,382</td><td>3637.0</td><td>3476.0</td><td style="color:#375623;font-weight:bold">+161.0</td><td>2.75</td><td>1.61</td><td style="color:#375623;font-weight:bold">+1.14</td><td>13.9%</td><td>14.2%</td><td style="color:#375623;font-weight:bold">-0.2</td><td>71.3%</td><td>56.1%</td><td style="color:#375623;font-weight:bold">+15.1</td><td>7</td><td>7</td><td>+0</td><td>0</td><td>0</td><td>+0</td><td>0</td><td>2</td><td style="color:#375623;font-weight:bold">-2</td></tr><tr><td style="text-align:left">耿明</td><td>7,693</td><td>4,267</td><td style="color:#375623;font-weight:bold">+3,426</td><td>3183.0</td><td>3162.0</td><td style="color:#375623;font-weight:bold">+21.0</td><td>2.42</td><td>1.35</td><td style="color:#375623;font-weight:bold">+1.07</td><td>17.7%</td><td>23.1%</td><td style="color:#375623;font-weight:bold">-5.4</td><td>65.6%</td><td>46.2%</td><td style="color:#375623;font-weight:bold">+19.5</td><td>55</td><td>55</td><td>+0</td><td>40</td><td>28</td><td style="color:#C00000;font-weight:bold">+12</td><td>30</td><td>27</td><td style="color:#C00000;font-weight:bold">+3</td></tr><tr><td style="text-align:left">顾星宇</td><td>6,721</td><td>3,261</td><td style="color:#375623;font-weight:bold">+3,460</td><td>3224.0</td><td>3197.0</td><td style="color:#375623;font-weight:bold">+27.0</td><td>2.08</td><td>1.02</td><td style="color:#375623;font-weight:bold">+1.06</td><td>25.8%</td><td>26.2%</td><td style="color:#375623;font-weight:bold">-0.4</td><td>56.8%</td><td>42.3%</td><td style="color:#375623;font-weight:bold">+14.5</td><td>127</td><td>125</td><td style="color:#C00000;font-weight:bold">+2</td><td>136</td><td>135</td><td style="color:#C00000;font-weight:bold">+1</td><td>55</td><td>57</td><td style="color:#375623;font-weight:bold">-2</td></tr><tr><td style="text-align:left">董梦乐</td><td>3,297</td><td>2,201</td><td style="color:#375623;font-weight:bold">+1,096</td><td>2367.0</td><td>2219.0</td><td style="color:#375623;font-weight:bold">+148.0</td><td>1.39</td><td>0.99</td><td style="color:#375623;font-weight:bold">+0.40</td><td>36.4%</td><td>38.7%</td><td style="color:#375623;font-weight:bold">-2.3</td><td>46.6%</td><td>35.8%</td><td style="color:#375623;font-weight:bold">+10.9</td><td>85</td><td>90</td><td style="color:#375623;font-weight:bold">-5</td><td>62</td><td>74</td><td style="color:#375623;font-weight:bold">-12</td><td>35</td><td>36</td><td style="color:#375623;font-weight:bold">-1</td></tr><tr><td style="text-align:left">刘博文</td><td>1,039</td><td>948</td><td style="color:#375623;font-weight:bold">+91</td><td>1086.0</td><td>1085.0</td><td style="color:#375623;font-weight:bold">+1.0</td><td>0.96</td><td>0.87</td><td style="color:#375623;font-weight:bold">+0.09</td><td>39.9%</td><td>37.6%</td><td style="color:#C00000;font-weight:bold">+2.3</td><td>40.1%</td><td>37.9%</td><td style="color:#375623;font-weight:bold">+2.2</td><td>149</td><td>147</td><td style="color:#C00000;font-weight:bold">+2</td><td>146</td><td>157</td><td style="color:#375623;font-weight:bold">-11</td><td>33</td><td>37</td><td style="color:#375623;font-weight:bold">-4</td></tr><tr><td style="text-align:left">王兴星</td><td>61</td><td>30</td><td style="color:#375623;font-weight:bold">+31</td><td>77.0</td><td>85.0</td><td style="color:#C00000;font-weight:bold">-8.0</td><td>0.79</td><td>0.35</td><td style="color:#375623;font-weight:bold">+0.44</td><td>64.9%</td><td>55.3%</td><td style="color:#C00000;font-weight:bold">+9.6</td><td>18.2%</td><td>18.8%</td><td style="color:#C00000;font-weight:bold">-0.6</td><td>4</td><td>4</td><td>+0</td><td>3</td><td>3</td><td>+0</td><td>1</td><td>1</td><td>+0</td></tr></tbody></table></div>
+    <div style="margin-top:8px">
+    
+<div class="person-header" onclick="togglePerson('person_单车_桂超')">
+  <span>桂超</span>
+  <button class="toggle-btn" id="btn-person_单车_桂超">&#9654; 展开</button>
+</div>
+<div class="person-body" id="person_单车_桂超">
+  <div class="broadcast-box">T-1(4/26): 订单 <strong>35,584</strong> (<span style="color:#C00000">↑13,377</span> vs T-2)，可用车 <strong>7842.0</strong> (<span style="color:#C00000">↓374.0</span>)，3+闲置率 <strong>9.1%</strong> (<span style="color:#C00000">↑0.3pp</span>)，出单率 <strong>73.0%</strong> (<span style="color:#375623">↑12.7pp</span>)</div>
+  <div class="chart-filters">
+  <button class="filter-btn active" onclick="toggleLine('person_单车_桂超',0,this)">订单</button>
+  <button class="filter-btn active" onclick="toggleLine('person_单车_桂超',1,this)">可用车</button>
+  <button class="filter-btn active" onclick="toggleLine('person_单车_桂超',2,this)">3+闲置率</button>
+  <button class="filter-btn active" onclick="toggleLine('person_单车_桂超',3,this)">出单率</button>
+</div>
+<div class="chart-wrap"><canvas id="person_单车_桂超" style="height:180px"></canvas></div>
+<script>initChart('person_单车_桂超',["06/01", "06/02", "06/03", "06/04", "06/05", "06/06", "06/07", "06/08", "06/09", "06/10", "06/11", "06/12", "06/13", "06/14", "06/15", "06/16", "06/17", "06/18", "06/19", "06/20", "06/21", "06/22", "06/23"],[79051, 80139, 75181, 80341, 75287, 49928, 46864, 62522, 68207, 72297, 73536, 72784, 53112, 51437, 74313, 79898, 75604, 71515, 11397, 33589, 26184, 22207, 35584],[11117.0, 11396.0, 11202.0, 11179.0, 9380.0, 7974.0, 8020.0, 7893.0, 8414.0, 8855.0, 8651.0, 8178.0, 7945.0, 7969.0, 8561.0, 8607.0, 9005.0, 7478.0, 7653.0, 8085.0, 8480.0, 8216.0, 7842.0],[3.2, 3.3, 3.6, 4.8, 4.9, 5.4, 6.3, 6.3, 4.8, 4.2, 3.8, 3.8, 3.7, 2.9, 2.6, 2.6, 2.1, 2.2, 3.6, 4.3, 9.2, 8.8, 9.1],[90.0, 88.3, 87.5, 86.0, 85.7, 83.6, 82.2, 83.7, 87.9, 85.9, 89.0, 89.9, 89.6, 90.0, 89.8, 90.7, 91.5, 92.7, 47.2, 77.2, 71.1, 60.2, 73.0]);</script>
+</div>
+<div class="person-header" onclick="togglePerson('person_单车_林杜鹏')">
+  <span>林杜鹏</span>
+  <button class="toggle-btn" id="btn-person_单车_林杜鹏">&#9654; 展开</button>
+</div>
+<div class="person-body" id="person_单车_林杜鹏">
+  <div class="broadcast-box">T-1(4/26): 订单 <strong>28,005</strong> (<span style="color:#C00000">↑11,488</span> vs T-2)，可用车 <strong>7891.0</strong> (<span style="color:#C00000">↓233.0</span>)，3+闲置率 <strong>13.5%</strong> (<span style="color:#C00000">↑1.0pp</span>)，出单率 <strong>69.9%</strong> (<span style="color:#375623">↑13.6pp</span>)</div>
+  <div class="chart-filters">
+  <button class="filter-btn active" onclick="toggleLine('person_单车_林杜鹏',0,this)">订单</button>
+  <button class="filter-btn active" onclick="toggleLine('person_单车_林杜鹏',1,this)">可用车</button>
+  <button class="filter-btn active" onclick="toggleLine('person_单车_林杜鹏',2,this)">3+闲置率</button>
+  <button class="filter-btn active" onclick="toggleLine('person_单车_林杜鹏',3,this)">出单率</button>
+</div>
+<div class="chart-wrap"><canvas id="person_单车_林杜鹏" style="height:180px"></canvas></div>
+<script>initChart('person_单车_林杜鹏',["06/01", "06/02", "06/03", "06/04", "06/05", "06/06", "06/07", "06/08", "06/09", "06/10", "06/11", "06/12", "06/13", "06/14", "06/15", "06/16", "06/17", "06/18", "06/19", "06/20", "06/21", "06/22", "06/23"],[40365, 39767, 40582, 39793, 42784, 35863, 31491, 36498, 36626, 36871, 38491, 40077, 42652, 39138, 43950, 45477, 44167, 44296, 11306, 38698, 27429, 16517, 28005],[12206.0, 12308.0, 11991.0, 11493.0, 10843.0, 8841.0, 8210.0, 8288.0, 8178.0, 8177.0, 7972.0, 7768.0, 7974.0, 8050.0, 7716.0, 7683.0, 7777.0, 7991.0, 7989.0, 8016.0, 8065.0, 8124.0, 7891.0],[8.8, 8.6, 8.4, 9.6, 10.4, 12.0, 11.7, 12.7, 8.6, 7.0, 6.7, 6.0, 6.3, 7.0, 7.2, 5.8, 5.5, 5.5, 7.6, 8.7, 13.1, 12.6, 13.5],[74.4, 74.8, 75.8, 76.8, 77.7, 69.9, 69.4, 74.7, 78.3, 80.2, 82.5, 83.6, 80.4, 78.2, 82.8, 85.9, 85.7, 85.1, 48.2, 74.9, 70.9, 56.2, 69.9]);</script>
+</div>
+<div class="person-header" onclick="togglePerson('person_单车_刘明')">
+  <span>刘明</span>
+  <button class="toggle-btn" id="btn-person_单车_刘明">&#9654; 展开</button>
+</div>
+<div class="person-body" id="person_单车_刘明">
+  <div class="broadcast-box">T-1(4/26): 订单 <strong>19,543</strong> (<span style="color:#C00000">↑157</span> vs T-2)，可用车 <strong>9519.0</strong> (<span style="color:#375623">↑13.0</span>)，3+闲置率 <strong>17.2%</strong> (<span style="color:#C00000">↑0.1pp</span>)，出单率 <strong>61.1%</strong> (<span style="color:#375623">↑5.6pp</span>)</div>
+  <div class="chart-filters">
+  <button class="filter-btn active" onclick="toggleLine('person_单车_刘明',0,this)">订单</button>
+  <button class="filter-btn active" onclick="toggleLine('person_单车_刘明',1,this)">可用车</button>
+  <button class="filter-btn active" onclick="toggleLine('person_单车_刘明',2,this)">3+闲置率</button>
+  <button class="filter-btn active" onclick="toggleLine('person_单车_刘明',3,this)">出单率</button>
+</div>
+<div class="chart-wrap"><canvas id="person_单车_刘明" style="height:180px"></canvas></div>
+<script>initChart('person_单车_刘明',["06/01", "06/02", "06/03", "06/04", "06/05", "06/06", "06/07", "06/08", "06/09", "06/10", "06/11", "06/12", "06/13", "06/14", "06/15", "06/16", "06/17", "06/18", "06/19", "06/20", "06/21", "06/22", "06/23"],[51868, 52272, 53396, 54102, 50347, 31413, 29572, 48536, 52363, 51426, 52710, 52761, 34457, 32381, 48770, 49327, 50525, 42628, 6520, 19576, 16047, 19386, 19543],[10263.0, 10236.0, 10275.0, 10427.0, 10254.0, 9767.0, 9443.0, 9388.0, 9363.0, 9578.0, 9583.0, 9546.0, 9474.0, 9317.0, 9402.0, 9489.0, 9440.0, 9404.0, 9453.0, 9487.0, 9479.0, 9506.0, 9519.0],[11.2, 11.4, 10.8, 10.8, 10.9, 11.3, 11.5, 11.2, 11.1, 10.3, 10.0, 10.7, 11.1, 10.3, 10.5, 10.0, 10.1, 11.1, 14.6, 15.6, 26.9, 17.1, 17.2],[77.1, 77.4, 76.6, 77.4, 77.1, 66.2, 65.2, 78.2, 78.7, 79.2, 78.6, 79.1, 72.5, 69.5, 78.2, 77.5, 77.4, 75.6, 29.3, 53.7, 50.1, 55.5, 61.1]);</script>
+</div>
+<div class="person-header" onclick="togglePerson('person_单车_许永青')">
+  <span>许永青</span>
+  <button class="toggle-btn" id="btn-person_单车_许永青">&#9654; 展开</button>
+</div>
+<div class="person-body" id="person_单车_许永青">
+  <div class="broadcast-box">T-1(4/26): 订单 <strong>17,327</strong> (<span style="color:#C00000">↑7,771</span> vs T-2)，可用车 <strong>6509.0</strong> (<span style="color:#C00000">↓93.0</span>)，3+闲置率 <strong>21.8%</strong> (<span style="color:#375623">↓0.4pp</span>)，出单率 <strong>61.5%</strong> (<span style="color:#375623">↑15.4pp</span>)</div>
+  <div class="chart-filters">
+  <button class="filter-btn active" onclick="toggleLine('person_单车_许永青',0,this)">订单</button>
+  <button class="filter-btn active" onclick="toggleLine('person_单车_许永青',1,this)">可用车</button>
+  <button class="filter-btn active" onclick="toggleLine('person_单车_许永青',2,this)">3+闲置率</button>
+  <button class="filter-btn active" onclick="toggleLine('person_单车_许永青',3,this)">出单率</button>
+</div>
+<div class="chart-wrap"><canvas id="person_单车_许永青" style="height:180px"></canvas></div>
+<script>initChart('person_单车_许永青',["06/01", "06/02", "06/03", "06/04", "06/05", "06/06", "06/07", "06/08", "06/09", "06/10", "06/11", "06/12", "06/13", "06/14", "06/15", "06/16", "06/17", "06/18", "06/19", "06/20", "06/21", "06/22", "06/23"],[25613, 25468, 26039, 24488, 25132, 19608, 17697, 22545, 22892, 22866, 23317, 24524, 22016, 20854, 25501, 25820, 25468, 25441, 5260, 18676, 13487, 9556, 17327],[9695.0, 9303.0, 8816.0, 8201.0, 7375.0, 6847.0, 6631.0, 6331.0, 6359.0, 6528.0, 6590.0, 6801.0, 7137.0, 7327.0, 6998.0, 7069.0, 6704.0, 6701.0, 6578.0, 6622.0, 6767.0, 6602.0, 6509.0],[20.8, 19.6, 20.1, 20.9, 22.6, 23.4, 23.6, 23.6, 21.8, 19.9, 18.1, 16.1, 15.5, 16.3, 15.2, 14.3, 14.7, 15.7, 19.5, 19.8, 25.6, 22.3, 21.8],[61.8, 62.7, 63.3, 64.3, 64.6, 59.3, 58.1, 62.9, 66.5, 65.3, 68.8, 69.2, 65.1, 63.6, 69.6, 69.0, 69.2, 70.5, 32.5, 60.1, 55.4, 46.1, 61.5]);</script>
+</div>
+<div class="person-header" onclick="togglePerson('person_单车_于继坤')">
+  <span>于继坤</span>
+  <button class="toggle-btn" id="btn-person_单车_于继坤">&#9654; 展开</button>
+</div>
+<div class="person-body" id="person_单车_于继坤">
+  <div class="broadcast-box">T-1(4/26): 订单 <strong>16,240</strong> (<span style="color:#C00000">↑8,805</span> vs T-2)，可用车 <strong>6857.0</strong> (<span style="color:#C00000">↓1.0</span>)，3+闲置率 <strong>27.8%</strong> (<span style="color:#375623">↓0.3pp</span>)，出单率 <strong>55.4%</strong> (<span style="color:#375623">↑16.5pp</span>)</div>
+  <div class="chart-filters">
+  <button class="filter-btn active" onclick="toggleLine('person_单车_于继坤',0,this)">订单</button>
+  <button class="filter-btn active" onclick="toggleLine('person_单车_于继坤',1,this)">可用车</button>
+  <button class="filter-btn active" onclick="toggleLine('person_单车_于继坤',2,this)">3+闲置率</button>
+  <button class="filter-btn active" onclick="toggleLine('person_单车_于继坤',3,this)">出单率</button>
+</div>
+<div class="chart-wrap"><canvas id="person_单车_于继坤" style="height:180px"></canvas></div>
+<script>initChart('person_单车_于继坤',["06/01", "06/02", "06/03", "06/04", "06/05", "06/06", "06/07", "06/08", "06/09", "06/10", "06/11", "06/12", "06/13", "06/14", "06/15", "06/16", "06/17", "06/18", "06/19", "06/20", "06/21", "06/22", "06/23"],[23353, 23263, 23109, 23050, 23743, 19203, 17659, 21798, 22365, 21708, 22070, 22872, 21024, 19575, 23562, 23725, 23957, 23793, 5514, 17745, 13804, 7435, 16240],[7172.0, 7222.0, 7152.0, 6914.0, 6790.0, 6260.0, 6172.0, 6179.0, 6102.0, 6002.0, 6007.0, 5922.0, 6194.0, 6165.0, 6209.0, 6071.0, 6262.0, 6206.0, 6324.0, 6478.0, 6659.0, 6858.0, 6857.0],[17.2, 16.6, 15.6, 17.3, 18.4, 20.6, 21.8, 22.5, 21.9, 20.4, 19.6, 18.3, 18.7, 20.7, 20.7, 19.7, 18.4, 18.7, 21.5, 22.5, 28.2, 28.1, 27.8],[68.5, 68.3, 69.3, 69.2, 78.2, 63.7, 59.5, 65.7, 67.1, 67.3, 67.3, 68.4, 64.5, 61.1, 68.0, 68.5, 69.8, 68.6, 34.2, 58.5, 53.7, 38.9, 55.4]);</script>
+</div>
+<div class="person-header" onclick="togglePerson('person_单车_胡锐')">
+  <span>胡锐</span>
+  <button class="toggle-btn" id="btn-person_单车_胡锐">&#9654; 展开</button>
+</div>
+<div class="person-body" id="person_单车_胡锐">
+  <div class="broadcast-box">T-1(4/26): 订单 <strong>15,946</strong> (<span style="color:#C00000">↑7,814</span> vs T-2)，可用车 <strong>3870.0</strong> (<span style="color:#375623">↑152.0</span>)，3+闲置率 <strong>10.7%</strong> (<span style="color:#375623">↓1.3pp</span>)，出单率 <strong>69.8%</strong> (<span style="color:#375623">↑19.3pp</span>)</div>
+  <div class="chart-filters">
+  <button class="filter-btn active" onclick="toggleLine('person_单车_胡锐',0,this)">订单</button>
+  <button class="filter-btn active" onclick="toggleLine('person_单车_胡锐',1,this)">可用车</button>
+  <button class="filter-btn active" onclick="toggleLine('person_单车_胡锐',2,this)">3+闲置率</button>
+  <button class="filter-btn active" onclick="toggleLine('person_单车_胡锐',3,this)">出单率</button>
+</div>
+<div class="chart-wrap"><canvas id="person_单车_胡锐" style="height:180px"></canvas></div>
+<script>initChart('person_单车_胡锐',["06/01", "06/02", "06/03", "06/04", "06/05", "06/06", "06/07", "06/08", "06/09", "06/10", "06/11", "06/12", "06/13", "06/14", "06/15", "06/16", "06/17", "06/18", "06/19", "06/20", "06/21", "06/22", "06/23"],[23375, 23453, 24181, 23081, 24111, 19206, 17340, 20740, 21858, 21834, 21957, 24377, 25188, 23093, 24880, 26661, 26468, 25998, 5577, 22190, 15389, 8132, 15946],[6122.0, 6250.0, 6287.0, 5598.0, 4307.0, 3285.0, 3528.0, 3473.0, 3463.0, 3637.0, 3832.0, 3852.0, 3674.0, 3492.0, 3610.0, 3661.0, 3653.0, 3465.0, 3325.0, 3539.0, 3864.0, 3718.0, 3870.0],[8.2, 8.8, 9.0, 10.2, 12.1, 13.4, 13.2, 12.4, 12.3, 9.3, 7.7, 8.0, 9.1, 10.5, 9.9, 8.1, 7.7, 9.3, 11.5, 10.7, 12.4, 11.9, 10.7],[74.5, 73.3, 71.0, 73.3, 75.9, 70.6, 68.4, 73.1, 75.6, 77.6, 78.9, 81.3, 78.1, 77.9, 78.4, 83.7, 83.9, 80.1, 47.1, 71.3, 69.1, 50.5, 69.8]);</script>
+</div>
+<div class="person-header" onclick="togglePerson('person_单车_张书军')">
+  <span>张书军</span>
+  <button class="toggle-btn" id="btn-person_单车_张书军">&#9654; 展开</button>
+</div>
+<div class="person-body" id="person_单车_张书军">
+  <div class="broadcast-box">T-1(4/26): 订单 <strong>15,231</strong> (<span style="color:#C00000">↑7,878</span> vs T-2)，可用车 <strong>6000.0</strong> (<span style="color:#375623">↑530.0</span>)，3+闲置率 <strong>16.4%</strong> (<span style="color:#375623">↓3.1pp</span>)，出单率 <strong>70.3%</strong> (<span style="color:#375623">↑19.4pp</span>)</div>
+  <div class="chart-filters">
+  <button class="filter-btn active" onclick="toggleLine('person_单车_张书军',0,this)">订单</button>
+  <button class="filter-btn active" onclick="toggleLine('person_单车_张书军',1,this)">可用车</button>
+  <button class="filter-btn active" onclick="toggleLine('person_单车_张书军',2,this)">3+闲置率</button>
+  <button class="filter-btn active" onclick="toggleLine('person_单车_张书军',3,this)">出单率</button>
+</div>
+<div class="chart-wrap"><canvas id="person_单车_张书军" style="height:180px"></canvas></div>
+<script>initChart('person_单车_张书军',["06/01", "06/02", "06/03", "06/04", "06/05", "06/06", "06/07", "06/08", "06/09", "06/10", "06/11", "06/12", "06/13", "06/14", "06/15", "06/16", "06/17", "06/18", "06/19", "06/20", "06/21", "06/22", "06/23"],[18787, 18987, 19317, 19355, 19839, 16203, 13902, 15542, 16799, 17663, 17991, 17178, 16022, 14861, 17666, 18297, 17948, 18646, 4554, 12746, 10562, 7353, 15231],[9787.0, 9798.0, 9755.0, 9154.0, 8204.0, 6545.0, 5223.0, 5145.0, 5301.0, 5346.0, 5019.0, 4627.0, 5021.0, 5012.0, 5208.0, 5235.0, 5301.0, 5228.0, 5204.0, 5215.0, 5521.0, 5470.0, 6000.0],[16.8, 15.7, 14.0, 16.7, 19.9, 23.3, 24.5, 21.7, 16.1, 13.1, 13.1, 14.0, 12.4, 12.6, 11.2, 11.0, 11.2, 11.7, 14.4, 15.7, 21.0, 19.6, 16.4],[64.0, 64.1, 65.7, 66.3, 69.6, 68.4, 65.1, 67.5, 71.8, 77.2, 85.1, 80.1, 70.8, 70.0, 77.5, 79.2, 78.2, 77.6, 35.4, 63.5, 61.0, 51.0, 70.3]);</script>
+</div>
+<div class="person-header" onclick="togglePerson('person_单车_杨志伟')">
+  <span>杨志伟</span>
+  <button class="toggle-btn" id="btn-person_单车_杨志伟">&#9654; 展开</button>
+</div>
+<div class="person-body" id="person_单车_杨志伟">
+  <div class="broadcast-box">T-1(4/26): 订单 <strong>13,652</strong> (<span style="color:#C00000">↑6,634</span> vs T-2)，可用车 <strong>5257.0</strong> (<span style="color:#375623">↑186.0</span>)，3+闲置率 <strong>16.1%</strong> (<span style="color:#375623">↓4.0pp</span>)，出单率 <strong>69.5%</strong> (<span style="color:#375623">↑25.0pp</span>)</div>
+  <div class="chart-filters">
+  <button class="filter-btn active" onclick="toggleLine('person_单车_杨志伟',0,this)">订单</button>
+  <button class="filter-btn active" onclick="toggleLine('person_单车_杨志伟',1,this)">可用车</button>
+  <button class="filter-btn active" onclick="toggleLine('person_单车_杨志伟',2,this)">3+闲置率</button>
+  <button class="filter-btn active" onclick="toggleLine('person_单车_杨志伟',3,this)">出单率</button>
+</div>
+<div class="chart-wrap"><canvas id="person_单车_杨志伟" style="height:180px"></canvas></div>
+<script>initChart('person_单车_杨志伟',["06/01", "06/02", "06/03", "06/04", "06/05", "06/06", "06/07", "06/08", "06/09", "06/10", "06/11", "06/12", "06/13", "06/14", "06/15", "06/16", "06/17", "06/18", "06/19", "06/20", "06/21", "06/22", "06/23"],[22901, 22379, 23575, 22288, 24419, 20567, 17652, 18773, 19038, 19583, 19792, 21148, 22676, 21245, 19970, 21331, 22489, 22378, 6152, 17414, 12864, 7018, 13652],[7777.0, 7697.0, 7603.0, 7509.0, 7144.0, 5126.0, 4288.0, 4272.0, 3674.0, 3632.0, 3885.0, 3664.0, 3599.0, 3588.0, 3683.0, 4325.0, 4631.0, 5966.0, 5777.0, 5187.0, 4843.0, 5071.0, 5257.0],[20.1, 20.0, 20.3, 20.1, 17.5, 23.6, 24.4, 22.9, 21.8, 17.6, 15.2, 15.7, 15.8, 15.6, 15.4, 13.1, 12.4, 9.9, 12.0, 14.3, 22.4, 20.1, 16.1],[60.8, 61.8, 66.4, 70.8, 87.2, 93.1, 66.3, 66.1, 70.5, 78.6, 78.2, 93.1, 79.2, 71.0, 72.2, 77.2, 80.7, 91.1, 38.3, 67.2, 58.0, 44.5, 69.5]);</script>
+</div>
+<div class="person-header" onclick="togglePerson('person_单车_郭富荣')">
+  <span>郭富荣</span>
+  <button class="toggle-btn" id="btn-person_单车_郭富荣">&#9654; 展开</button>
+</div>
+<div class="person-body" id="person_单车_郭富荣">
+  <div class="broadcast-box">T-1(4/26): 订单 <strong>12,653</strong> (<span style="color:#C00000">↑6,826</span> vs T-2)，可用车 <strong>4317.0</strong> (<span style="color:#C00000">↓119.0</span>)，3+闲置率 <strong>16.6%</strong> (<span style="color:#375623">↓3.3pp</span>)，出单率 <strong>69.4%</strong> (<span style="color:#375623">↑22.3pp</span>)</div>
+  <div class="chart-filters">
+  <button class="filter-btn active" onclick="toggleLine('person_单车_郭富荣',0,this)">订单</button>
+  <button class="filter-btn active" onclick="toggleLine('person_单车_郭富荣',1,this)">可用车</button>
+  <button class="filter-btn active" onclick="toggleLine('person_单车_郭富荣',2,this)">3+闲置率</button>
+  <button class="filter-btn active" onclick="toggleLine('person_单车_郭富荣',3,this)">出单率</button>
+</div>
+<div class="chart-wrap"><canvas id="person_单车_郭富荣" style="height:180px"></canvas></div>
+<script>initChart('person_单车_郭富荣',["06/01", "06/02", "06/03", "06/04", "06/05", "06/06", "06/07", "06/08", "06/09", "06/10", "06/11", "06/12", "06/13", "06/14", "06/15", "06/16", "06/17", "06/18", "06/19", "06/20", "06/21", "06/22", "06/23"],[19077, 18807, 18915, 19014, 18960, 15815, 14282, 16143, 16611, 16726, 17109, 17687, 16733, 15400, 17110, 17332, 18465, 19688, 5317, 15214, 11922, 5827, 12653],[6425.0, 6491.0, 6464.0, 6497.0, 5376.0, 4063.0, 3955.0, 3922.0, 4113.0, 4183.0, 4118.0, 3938.0, 3781.0, 3703.0, 3778.0, 4008.0, 4485.0, 4559.0, 4538.0, 4327.0, 4253.0, 4436.0, 4317.0],[11.9, 11.2, 11.0, 12.2, 14.2, 16.6, 17.5, 17.2, 16.2, 15.0, 14.1, 14.0, 15.0, 15.7, 15.6, 12.5, 11.3, 11.0, 12.4, 14.4, 20.6, 19.9, 16.6],[74.0, 76.5, 76.0, 74.9, 74.8, 75.1, 65.5, 73.2, 75.1, 77.5, 77.6, 81.5, 72.8, 71.8, 76.0, 78.8, 81.0, 81.4, 42.4, 68.5, 64.4, 47.1, 69.4]);</script>
+</div>
+<div class="person-header" onclick="togglePerson('person_单车_张晨阳')">
+  <span>张晨阳</span>
+  <button class="toggle-btn" id="btn-person_单车_张晨阳">&#9654; 展开</button>
+</div>
+<div class="person-body" id="person_单车_张晨阳">
+  <div class="broadcast-box">T-1(4/26): 订单 <strong>9,988</strong> (<span style="color:#C00000">↑4,382</span> vs T-2)，可用车 <strong>3637.0</strong> (<span style="color:#375623">↑161.0</span>)，3+闲置率 <strong>13.9%</strong> (<span style="color:#375623">↓0.2pp</span>)，出单率 <strong>71.3%</strong> (<span style="color:#375623">↑15.1pp</span>)</div>
+  <div class="chart-filters">
+  <button class="filter-btn active" onclick="toggleLine('person_单车_张晨阳',0,this)">订单</button>
+  <button class="filter-btn active" onclick="toggleLine('person_单车_张晨阳',1,this)">可用车</button>
+  <button class="filter-btn active" onclick="toggleLine('person_单车_张晨阳',2,this)">3+闲置率</button>
+  <button class="filter-btn active" onclick="toggleLine('person_单车_张晨阳',3,this)">出单率</button>
+</div>
+<div class="chart-wrap"><canvas id="person_单车_张晨阳" style="height:180px"></canvas></div>
+<script>initChart('person_单车_张晨阳',["06/01", "06/02", "06/03", "06/04", "06/05", "06/06", "06/07", "06/08", "06/09", "06/10", "06/11", "06/12", "06/13", "06/14", "06/15", "06/16", "06/17", "06/18", "06/19", "06/20", "06/21", "06/22", "06/23"],[13594, 13707, 13837, 13141, 13659, 11255, 9978, 11841, 12688, 13300, 13403, 14129, 14098, 12548, 13144, 14147, 14358, 14770, 3514, 12218, 8797, 5606, 9988],[4329.0, 4169.0, 4223.0, 4026.0, 3568.0, 3090.0, 3017.0, 3222.0, 3265.0, 3415.0, 3530.0, 3501.0, 3143.0, 3136.0, 3259.0, 3370.0, 3505.0, 3486.0, 3414.0, 3338.0, 3264.0, 3476.0, 3637.0],[13.4, 13.1, 13.0, 14.4, 14.2, 14.7, 14.4, 12.4, 11.8, 9.8, 9.3, 8.8, 9.6, 10.6, 10.1, 9.1, 8.8, 8.5, 10.0, 12.0, 16.1, 14.2, 13.9],[72.2, 73.2, 72.8, 71.6, 75.9, 74.9, 66.1, 76.6, 79.2, 81.6, 82.9, 85.7, 76.0, 72.6, 79.7, 82.9, 83.3, 81.4, 41.7, 69.4, 64.0, 56.1, 71.3]);</script>
+</div>
+<div class="person-header" onclick="togglePerson('person_单车_耿明')">
+  <span>耿明</span>
+  <button class="toggle-btn" id="btn-person_单车_耿明">&#9654; 展开</button>
+</div>
+<div class="person-body" id="person_单车_耿明">
+  <div class="broadcast-box">T-1(4/26): 订单 <strong>7,693</strong> (<span style="color:#C00000">↑3,426</span> vs T-2)，可用车 <strong>3183.0</strong> (<span style="color:#375623">↑21.0</span>)，3+闲置率 <strong>17.7%</strong> (<span style="color:#375623">↓5.4pp</span>)，出单率 <strong>65.6%</strong> (<span style="color:#375623">↑19.5pp</span>)</div>
+  <div class="chart-filters">
+  <button class="filter-btn active" onclick="toggleLine('person_单车_耿明',0,this)">订单</button>
+  <button class="filter-btn active" onclick="toggleLine('person_单车_耿明',1,this)">可用车</button>
+  <button class="filter-btn active" onclick="toggleLine('person_单车_耿明',2,this)">3+闲置率</button>
+  <button class="filter-btn active" onclick="toggleLine('person_单车_耿明',3,this)">出单率</button>
+</div>
+<div class="chart-wrap"><canvas id="person_单车_耿明" style="height:180px"></canvas></div>
+<script>initChart('person_单车_耿明',["06/01", "06/02", "06/03", "06/04", "06/05", "06/06", "06/07", "06/08", "06/09", "06/10", "06/11", "06/12", "06/13", "06/14", "06/15", "06/16", "06/17", "06/18", "06/19", "06/20", "06/21", "06/22", "06/23"],[11699, 11736, 11906, 11950, 12329, 9835, 8683, 9978, 10256, 9368, 9462, 10021, 9664, 9255, 10438, 11721, 11914, 11720, 2751, 8965, 6257, 4267, 7693],[4326.0, 4237.0, 4376.0, 4251.0, 3917.0, 3332.0, 2977.0, 3111.0, 2840.0, 2565.0, 2617.0, 2635.0, 2692.0, 2739.0, 2869.0, 3045.0, 3235.0, 3211.0, 3235.0, 3335.0, 3082.0, 3162.0, 3183.0],[17.1, 17.2, 15.4, 15.4, 16.4, 20.0, 22.1, 18.6, 18.7, 16.6, 15.3, 15.1, 15.6, 16.8, 16.0, 15.1, 14.1, 13.9, 16.4, 17.0, 26.7, 23.1, 17.7],[67.3, 67.5, 70.5, 71.3, 72.3, 64.8, 55.3, 69.2, 77.6, 75.5, 75.5, 77.9, 67.5, 64.1, 73.7, 77.9, 75.9, 75.2, 34.1, 59.6, 53.1, 46.2, 65.6]);</script>
+</div>
+<div class="person-header" onclick="togglePerson('person_单车_顾星宇')">
+  <span>顾星宇</span>
+  <button class="toggle-btn" id="btn-person_单车_顾星宇">&#9654; 展开</button>
+</div>
+<div class="person-body" id="person_单车_顾星宇">
+  <div class="broadcast-box">T-1(4/26): 订单 <strong>6,721</strong> (<span style="color:#C00000">↑3,460</span> vs T-2)，可用车 <strong>3224.0</strong> (<span style="color:#375623">↑27.0</span>)，3+闲置率 <strong>25.8%</strong> (<span style="color:#375623">↓0.4pp</span>)，出单率 <strong>56.8%</strong> (<span style="color:#375623">↑14.5pp</span>)</div>
+  <div class="chart-filters">
+  <button class="filter-btn active" onclick="toggleLine('person_单车_顾星宇',0,this)">订单</button>
+  <button class="filter-btn active" onclick="toggleLine('person_单车_顾星宇',1,this)">可用车</button>
+  <button class="filter-btn active" onclick="toggleLine('person_单车_顾星宇',2,this)">3+闲置率</button>
+  <button class="filter-btn active" onclick="toggleLine('person_单车_顾星宇',3,this)">出单率</button>
+</div>
+<div class="chart-wrap"><canvas id="person_单车_顾星宇" style="height:180px"></canvas></div>
+<script>initChart('person_单车_顾星宇',["06/01", "06/02", "06/03", "06/04", "06/05", "06/06", "06/07", "06/08", "06/09", "06/10", "06/11", "06/12", "06/13", "06/14", "06/15", "06/16", "06/17", "06/18", "06/19", "06/20", "06/21", "06/22", "06/23"],[10395, 10487, 11062, 10818, 10754, 10081, 8731, 8138, 8226, 8632, 8980, 8895, 8643, 7946, 7748, 8120, 8812, 9420, 2413, 8189, 5429, 3261, 6721],[5288.0, 5305.0, 5341.0, 5196.0, 4610.0, 4198.0, 3722.0, 3551.0, 3426.0, 3381.0, 3280.0, 3057.0, 2840.0, 2829.0, 2707.0, 2733.0, 3024.0, 3030.0, 3082.0, 3061.0, 3122.0, 3197.0, 3224.0],[25.8, 25.5, 25.0, 25.9, 27.6, 29.4, 31.9, 32.8, 30.5, 27.8, 26.3, 28.9, 29.6, 27.7, 26.2, 23.9, 22.1, 21.8, 24.7, 23.8, 27.2, 26.2, 25.8],[57.2, 57.4, 57.2, 58.1, 64.3, 58.0, 57.4, 54.0, 54.8, 57.9, 61.8, 65.6, 60.9, 57.0, 59.5, 62.6, 66.1, 65.3, 32.5, 62.1, 55.0, 42.3, 56.8]);</script>
+</div>
+<div class="person-header" onclick="togglePerson('person_单车_董梦乐')">
+  <span>董梦乐</span>
+  <button class="toggle-btn" id="btn-person_单车_董梦乐">&#9654; 展开</button>
+</div>
+<div class="person-body" id="person_单车_董梦乐">
+  <div class="broadcast-box">T-1(4/26): 订单 <strong>3,297</strong> (<span style="color:#C00000">↑1,096</span> vs T-2)，可用车 <strong>2367.0</strong> (<span style="color:#375623">↑148.0</span>)，3+闲置率 <strong>36.4%</strong> (<span style="color:#375623">↓2.3pp</span>)，出单率 <strong>46.6%</strong> (<span style="color:#375623">↑10.9pp</span>)</div>
+  <div class="chart-filters">
+  <button class="filter-btn active" onclick="toggleLine('person_单车_董梦乐',0,this)">订单</button>
+  <button class="filter-btn active" onclick="toggleLine('person_单车_董梦乐',1,this)">可用车</button>
+  <button class="filter-btn active" onclick="toggleLine('person_单车_董梦乐',2,this)">3+闲置率</button>
+  <button class="filter-btn active" onclick="toggleLine('person_单车_董梦乐',3,this)">出单率</button>
+</div>
+<div class="chart-wrap"><canvas id="person_单车_董梦乐" style="height:180px"></canvas></div>
+<script>initChart('person_单车_董梦乐',["06/01", "06/02", "06/03", "06/04", "06/05", "06/06", "06/07", "06/08", "06/09", "06/10", "06/11", "06/12", "06/13", "06/14", "06/15", "06/16", "06/17", "06/18", "06/19", "06/20", "06/21", "06/22", "06/23"],[6791, 6451, 6595, 6862, 7379, 5133, 4279, 5143, 5135, 5044, 5034, 5328, 4494, 4463, 5466, 5712, 5541, 5901, 1257, 3931, 3461, 2201, 3297],[3450.0, 3522.0, 3510.0, 3337.0, 3031.0, 2389.0, 2111.0, 2157.0, 2042.0, 1928.0, 1941.0, 1871.0, 1949.0, 2055.0, 2269.0, 2204.0, 2248.0, 2241.0, 2265.0, 2332.0, 2213.0, 2219.0, 2367.0],[27.5, 28.1, 27.6, 29.6, 30.6, 30.8, 33.0, 33.4, 30.2, 29.2, 28.7, 29.9, 29.5, 30.7, 28.1, 28.1, 27.4, 28.2, 32.2, 33.9, 41.0, 38.7, 36.4],[55.5, 53.2, 52.5, 56.9, 88.3, 108.2, 57.0, 51.0, 54.6, 57.2, 55.6, 58.3, 54.2, 52.9, 57.1, 59.9, 56.0, 56.7, 26.0, 47.0, 43.6, 35.8, 46.6]);</script>
+</div>
+<div class="person-header" onclick="togglePerson('person_单车_刘博文')">
+  <span>刘博文</span>
+  <button class="toggle-btn" id="btn-person_单车_刘博文">&#9654; 展开</button>
+</div>
+<div class="person-body" id="person_单车_刘博文">
+  <div class="broadcast-box">T-1(4/26): 订单 <strong>1,039</strong> (<span style="color:#C00000">↑91</span> vs T-2)，可用车 <strong>1086.0</strong> (<span style="color:#375623">↑1.0</span>)，3+闲置率 <strong>39.9%</strong> (<span style="color:#C00000">↑2.3pp</span>)，出单率 <strong>40.1%</strong> (<span style="color:#375623">↑2.2pp</span>)</div>
+  <div class="chart-filters">
+  <button class="filter-btn active" onclick="toggleLine('person_单车_刘博文',0,this)">订单</button>
+  <button class="filter-btn active" onclick="toggleLine('person_单车_刘博文',1,this)">可用车</button>
+  <button class="filter-btn active" onclick="toggleLine('person_单车_刘博文',2,this)">3+闲置率</button>
+  <button class="filter-btn active" onclick="toggleLine('person_单车_刘博文',3,this)">出单率</button>
+</div>
+<div class="chart-wrap"><canvas id="person_单车_刘博文" style="height:180px"></canvas></div>
+<script>initChart('person_单车_刘博文',["06/01", "06/02", "06/03", "06/04", "06/05", "06/06", "06/07", "06/08", "06/09", "06/10", "06/11", "06/12", "06/13", "06/14", "06/15", "06/16", "06/17", "06/18", "06/19", "06/20", "06/21", "06/22", "06/23"],[2494, 2616, 2576, 2633, 3023, 2321, 1979, 2235, 2263, 2135, 2155, 2077, 1850, 1695, 1972, 1993, 1955, 1854, 477, 1556, 1194, 948, 1039],[1958.0, 1998.0, 1994.0, 2039.0, 2002.0, 1765.0, 1421.0, 1400.0, 1281.0, 1187.0, 1143.0, 1214.0, 1113.0, 1052.0, 1054.0, 1100.0, 1090.0, 1107.0, 1101.0, 1126.0, 1116.0, 1085.0, 1086.0],[37.2, 38.1, 36.9, 37.1, 37.2, 34.9, 35.4, 35.1, 35.7, 36.0, 33.9, 35.4, 33.4, 32.9, 32.8, 30.4, 30.9, 31.2, 33.8, 36.1, 42.0, 37.6, 39.9],[46.5, 45.5, 46.5, 47.6, 50.2, 62.6, 48.8, 52.4, 55.0, 54.3, 54.2, 51.2, 52.2, 54.3, 55.3, 54.3, 54.6, 52.9, 22.7, 44.6, 41.5, 37.9, 40.1]);</script>
+</div>
+<div class="person-header" onclick="togglePerson('person_单车_王兴星')">
+  <span>王兴星</span>
+  <button class="toggle-btn" id="btn-person_单车_王兴星">&#9654; 展开</button>
+</div>
+<div class="person-body" id="person_单车_王兴星">
+  <div class="broadcast-box">T-1(4/26): 订单 <strong>61</strong> (<span style="color:#C00000">↑31</span> vs T-2)，可用车 <strong>77.0</strong> (<span style="color:#C00000">↓8.0</span>)，3+闲置率 <strong>64.9%</strong> (<span style="color:#C00000">↑9.6pp</span>)，出单率 <strong>18.2%</strong> (<span style="color:#C00000">↓0.6pp</span>)</div>
+  <div class="chart-filters">
+  <button class="filter-btn active" onclick="toggleLine('person_单车_王兴星',0,this)">订单</button>
+  <button class="filter-btn active" onclick="toggleLine('person_单车_王兴星',1,this)">可用车</button>
+  <button class="filter-btn active" onclick="toggleLine('person_单车_王兴星',2,this)">3+闲置率</button>
+  <button class="filter-btn active" onclick="toggleLine('person_单车_王兴星',3,this)">出单率</button>
+</div>
+<div class="chart-wrap"><canvas id="person_单车_王兴星" style="height:180px"></canvas></div>
+<script>initChart('person_单车_王兴星',["06/01", "06/02", "06/03", "06/04", "06/05", "06/06", "06/07", "06/08", "06/09", "06/10", "06/11", "06/12", "06/13", "06/14", "06/15", "06/16", "06/17", "06/18", "06/19", "06/20", "06/21", "06/22", "06/23"],[94, 101, 107, 120, 138, 79, 76, 75, 97, 69, 89, 80, 81, 99, 94, 118, 92, 84, 18, 66, 44, 30, 61],[121.0, 122.0, 120.0, 110.0, 126.0, 127.0, 89.0, 81.0, 84.0, 87.0, 85.0, 71.0, 73.0, 73.0, 76.0, 81.0, 80.0, 75.0, 74.0, 79.0, 79.0, 85.0, 77.0],[50.4, 47.5, 50.0, 51.8, 42.9, 48.0, 50.6, 49.4, 46.4, 47.1, 47.1, 47.9, 45.2, 46.6, 44.7, 39.5, 48.8, 54.7, 59.5, 53.2, 57.0, 55.3, 64.9],[31.4, 32.0, 27.5, 29.1, 38.1, 27.6, 30.3, 33.3, 35.7, 34.5, 35.3, 32.4, 35.6, 42.5, 40.8, 38.3, 32.5, 33.3, 13.5, 31.6, 22.8, 18.8, 18.2]);</script>
+</div>
+    </div>
+
+    <div class="sub-title" style="margin-top:16px">🛵 助力车责任人</div>
+    <div class="table-wrap"><table><thead><tr><th>责任人</th><th>T-1订单</th><th>T-2订单</th><th>订单变化</th><th>T-1可用车</th><th>T-2可用车</th><th>可用车变化</th><th>T-1翻台</th><th>T-2翻台</th><th>翻台变化</th><th>T-1 3+闲置率</th><th>T-2 3+闲置率</th><th>闲置率变化(pp)</th><th>T-1出单率</th><th>T-2出单率</th><th>出单率变化(pp)</th><th>T-1失联</th><th>T-2失联</th><th>失联变化</th><th>T-1超区</th><th>T-2超区</th><th>超区变化</th><th>T-1故障</th><th>T-2故障</th><th>故障变化</th></tr></thead><tbody><tr><td style="text-align:left">刘明</td><td>39,076</td><td>38,886</td><td style="color:#375623;font-weight:bold">+190</td><td>8014.0</td><td>8057.0</td><td style="color:#C00000;font-weight:bold">-43.0</td><td>4.88</td><td>4.83</td><td style="color:#375623;font-weight:bold">+0.05</td><td>4.1%</td><td>3.7%</td><td style="color:#C00000;font-weight:bold">+0.5</td><td>83.2%</td><td>80.2%</td><td style="color:#375623;font-weight:bold">+3.0</td><td>3</td><td>22</td><td style="color:#375623;font-weight:bold">-19</td><td>2</td><td>1</td><td style="color:#C00000;font-weight:bold">+1</td><td>3</td><td>2</td><td style="color:#C00000;font-weight:bold">+1</td></tr><tr><td style="text-align:left">刘永振</td><td>4,260</td><td>1,480</td><td style="color:#375623;font-weight:bold">+2,780</td><td>912.0</td><td>749.0</td><td style="color:#375623;font-weight:bold">+163.0</td><td>4.67</td><td>1.98</td><td style="color:#375623;font-weight:bold">+2.69</td><td>0.1%</td><td>0.1%</td><td style="color:#375623;font-weight:bold">-0.0</td><td>77.4%</td><td>61.0%</td><td style="color:#375623;font-weight:bold">+16.4</td><td>1</td><td>1</td><td>+0</td><td>1</td><td>0</td><td style="color:#C00000;font-weight:bold">+1</td><td>0</td><td>0</td><td>+0</td></tr><tr><td style="text-align:left">刘博文</td><td>2,605</td><td>2,472</td><td style="color:#375623;font-weight:bold">+133</td><td>1093.0</td><td>1117.0</td><td style="color:#C00000;font-weight:bold">-24.0</td><td>2.38</td><td>2.21</td><td style="color:#375623;font-weight:bold">+0.17</td><td>5.9%</td><td>4.9%</td><td style="color:#C00000;font-weight:bold">+1.0</td><td>72.6%</td><td>66.9%</td><td style="color:#375623;font-weight:bold">+5.8</td><td>1</td><td>2</td><td style="color:#375623;font-weight:bold">-1</td><td>1</td><td>1</td><td>+0</td><td>1</td><td>3</td><td style="color:#375623;font-weight:bold">-2</td></tr><tr><td style="text-align:left">王兴星</td><td>2,186</td><td>2,156</td><td style="color:#375623;font-weight:bold">+30</td><td>1270.0</td><td>1278.0</td><td style="color:#C00000;font-weight:bold">-8.0</td><td>1.72</td><td>1.69</td><td style="color:#375623;font-weight:bold">+0.03</td><td>13.5%</td><td>9.2%</td><td style="color:#C00000;font-weight:bold">+4.4</td><td>55.0%</td><td>57.8%</td><td style="color:#C00000;font-weight:bold">-2.8</td><td>1</td><td>6</td><td style="color:#375623;font-weight:bold">-5</td><td>0</td><td>10</td><td style="color:#375623;font-weight:bold">-10</td><td>2</td><td>8</td><td style="color:#375623;font-weight:bold">-6</td></tr></tbody></table></div>
+    <div style="margin-top:8px">
+    
+<div class="person-header" onclick="togglePerson('person_助力车_刘明')">
+  <span>刘明</span>
+  <button class="toggle-btn" id="btn-person_助力车_刘明">&#9654; 展开</button>
+</div>
+<div class="person-body" id="person_助力车_刘明">
+  <div class="broadcast-box">T-1(4/26): 订单 <strong>39,076</strong> (<span style="color:#C00000">↑190</span> vs T-2)，可用车 <strong>8014.0</strong> (<span style="color:#C00000">↓43.0</span>)，3+闲置率 <strong>4.1%</strong> (<span style="color:#C00000">↑0.5pp</span>)，出单率 <strong>83.2%</strong> (<span style="color:#375623">↑3.0pp</span>)</div>
+  <div class="chart-filters">
+  <button class="filter-btn active" onclick="toggleLine('person_助力车_刘明',0,this)">订单</button>
+  <button class="filter-btn active" onclick="toggleLine('person_助力车_刘明',1,this)">可用车</button>
+  <button class="filter-btn active" onclick="toggleLine('person_助力车_刘明',2,this)">3+闲置率</button>
+  <button class="filter-btn active" onclick="toggleLine('person_助力车_刘明',3,this)">出单率</button>
+</div>
+<div class="chart-wrap"><canvas id="person_助力车_刘明" style="height:180px"></canvas></div>
+<script>initChart('person_助力车_刘明',["06/01", "06/02", "06/03", "06/04", "06/05", "06/06", "06/07", "06/08", "06/09", "06/10", "06/11", "06/12", "06/13", "06/14", "06/15", "06/16", "06/17", "06/18", "06/19", "06/20", "06/21", "06/22", "06/23"],[74100, 73590, 77098, 76053, 75955, 71525, 57327, 69968, 73474, 76928, 75982, 77630, 63508, 67169, 68304, 69764, 74004, 69352, 19148, 40740, 35376, 38886, 39076],[8551.0, 8442.0, 8403.0, 8449.0, 8356.0, 8350.0, 8336.0, 8507.0, 8529.0, 8648.0, 8729.0, 8869.0, 8770.0, 8797.0, 8159.0, 8116.0, 8077.0, 7953.0, 7910.0, 8009.0, 8095.0, 8057.0, 8014.0],[2.4, 2.6, 2.2, 2.2, 2.2, 2.5, 1.6, 2.0, 1.8, 2.9, 2.7, 1.9, 1.9, 1.6, 1.5, 1.4, 1.3, 1.5, 2.4, 2.3, 9.0, 3.7, 4.1],[92.0, 92.0, 92.2, 92.6, 93.5, 89.7, 86.8, 91.0, 91.3, 91.9, 91.1, 92.9, 89.8, 89.4, 92.3, 92.5, 92.9, 91.6, 54.5, 75.1, 74.6, 80.2, 83.2]);</script>
+</div>
+<div class="person-header" onclick="togglePerson('person_助力车_刘永振')">
+  <span>刘永振</span>
+  <button class="toggle-btn" id="btn-person_助力车_刘永振">&#9654; 展开</button>
+</div>
+<div class="person-body" id="person_助力车_刘永振">
+  <div class="broadcast-box">T-1(4/26): 订单 <strong>4,260</strong> (<span style="color:#C00000">↑2,780</span> vs T-2)，可用车 <strong>912.0</strong> (<span style="color:#375623">↑163.0</span>)，3+闲置率 <strong>0.1%</strong> (<span style="color:#375623">↓0.0pp</span>)，出单率 <strong>77.4%</strong> (<span style="color:#375623">↑16.4pp</span>)</div>
+  <div class="chart-filters">
+  <button class="filter-btn active" onclick="toggleLine('person_助力车_刘永振',0,this)">订单</button>
+  <button class="filter-btn active" onclick="toggleLine('person_助力车_刘永振',1,this)">可用车</button>
+  <button class="filter-btn active" onclick="toggleLine('person_助力车_刘永振',2,this)">3+闲置率</button>
+  <button class="filter-btn active" onclick="toggleLine('person_助力车_刘永振',3,this)">出单率</button>
+</div>
+<div class="chart-wrap"><canvas id="person_助力车_刘永振" style="height:180px"></canvas></div>
+<script>initChart('person_助力车_刘永振',["06/01", "06/02", "06/03", "06/04", "06/05", "06/06", "06/07", "06/08", "06/09", "06/10", "06/11", "06/12", "06/13", "06/14", "06/15", "06/16", "06/17", "06/18", "06/19", "06/20", "06/21", "06/22", "06/23"],[4667, 4267, 4154, 3768, 3831, 9760, 10732, 4771, 5356, 3578, 4232, 5744, 11699, 12846, 9878, 13038, 11288, 9696, 2779, 13356, 8505, 1480, 4260],[1168.0, 1182.0, 1173.0, 1178.0, 1174.0, 1155.0, 1125.0, 1178.0, 1173.0, 1176.0, 1164.0, 1167.0, 1145.0, 1150.0, 1076.0, 1045.0, 991.0, 766.0, 733.0, 679.0, 740.0, 749.0, 912.0],[0.3, 0.5, 0.1, 0.3, 0.0, 0.2, 0.0, 0.0, 0.1, 0.0, 7.9, 0.3, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.3, 1.2, 0.1, 0.1],[67.6, 65.5, 67.4, 70.6, 68.9, 88.0, 88.4, 73.8, 83.1, 69.0, 74.9, 80.7, 92.9, 97.4, 91.3, 99.0, 98.0, 97.3, 74.5, 94.3, 96.5, 61.0, 77.4]);</script>
+</div>
+<div class="person-header" onclick="togglePerson('person_助力车_刘博文')">
+  <span>刘博文</span>
+  <button class="toggle-btn" id="btn-person_助力车_刘博文">&#9654; 展开</button>
+</div>
+<div class="person-body" id="person_助力车_刘博文">
+  <div class="broadcast-box">T-1(4/26): 订单 <strong>2,605</strong> (<span style="color:#C00000">↑133</span> vs T-2)，可用车 <strong>1093.0</strong> (<span style="color:#C00000">↓24.0</span>)，3+闲置率 <strong>5.9%</strong> (<span style="color:#C00000">↑1.0pp</span>)，出单率 <strong>72.6%</strong> (<span style="color:#375623">↑5.8pp</span>)</div>
+  <div class="chart-filters">
+  <button class="filter-btn active" onclick="toggleLine('person_助力车_刘博文',0,this)">订单</button>
+  <button class="filter-btn active" onclick="toggleLine('person_助力车_刘博文',1,this)">可用车</button>
+  <button class="filter-btn active" onclick="toggleLine('person_助力车_刘博文',2,this)">3+闲置率</button>
+  <button class="filter-btn active" onclick="toggleLine('person_助力车_刘博文',3,this)">出单率</button>
+</div>
+<div class="chart-wrap"><canvas id="person_助力车_刘博文" style="height:180px"></canvas></div>
+<script>initChart('person_助力车_刘博文',["06/01", "06/02", "06/03", "06/04", "06/05", "06/06", "06/07", "06/08", "06/09", "06/10", "06/11", "06/12", "06/13", "06/14", "06/15", "06/16", "06/17", "06/18", "06/19", "06/20", "06/21", "06/22", "06/23"],[14509, 14207, 14396, 14631, 16076, 15539, 14675, 14199, 15006, 15278, 15505, 16313, 16916, 16350, 4430, 4558, 4682, 5079, 1742, 4273, 3547, 2472, 2605],[3850.0, 3863.0, 3889.0, 3856.0, 3894.0, 3901.0, 3960.0, 4009.0, 4048.0, 4047.0, 3952.0, 3971.0, 4031.0, 4007.0, 1167.0, 1182.0, 1238.0, 1248.0, 1204.0, 1183.0, 1108.0, 1117.0, 1093.0],[6.5, 6.3, 5.5, 5.0, 3.7, 4.0, 4.3, 3.1, 2.8, 2.8, 2.1, 2.3, 3.1, 3.7, 2.8, 2.7, 2.1, 2.2, 5.6, 4.6, 7.5, 4.9, 5.9],[80.6, 81.3, 81.9, 81.5, 84.2, 79.0, 77.7, 79.8, 82.8, 83.0, 84.3, 85.5, 82.4, 80.3, 83.3, 85.4, 84.4, 81.7, 50.8, 77.2, 72.5, 66.9, 72.6]);</script>
+</div>
+<div class="person-header" onclick="togglePerson('person_助力车_王兴星')">
+  <span>王兴星</span>
+  <button class="toggle-btn" id="btn-person_助力车_王兴星">&#9654; 展开</button>
+</div>
+<div class="person-body" id="person_助力车_王兴星">
+  <div class="broadcast-box">T-1(4/26): 订单 <strong>2,186</strong> (<span style="color:#C00000">↑30</span> vs T-2)，可用车 <strong>1270.0</strong> (<span style="color:#C00000">↓8.0</span>)，3+闲置率 <strong>13.5%</strong> (<span style="color:#C00000">↑4.4pp</span>)，出单率 <strong>55.0%</strong> (<span style="color:#C00000">↓2.8pp</span>)</div>
+  <div class="chart-filters">
+  <button class="filter-btn active" onclick="toggleLine('person_助力车_王兴星',0,this)">订单</button>
+  <button class="filter-btn active" onclick="toggleLine('person_助力车_王兴星',1,this)">可用车</button>
+  <button class="filter-btn active" onclick="toggleLine('person_助力车_王兴星',2,this)">3+闲置率</button>
+  <button class="filter-btn active" onclick="toggleLine('person_助力车_王兴星',3,this)">出单率</button>
+</div>
+<div class="chart-wrap"><canvas id="person_助力车_王兴星" style="height:180px"></canvas></div>
+<script>initChart('person_助力车_王兴星',["06/01", "06/02", "06/03", "06/04", "06/05", "06/06", "06/07", "06/08", "06/09", "06/10", "06/11", "06/12", "06/13", "06/14", "06/15", "06/16", "06/17", "06/18", "06/19", "06/20", "06/21", "06/22", "06/23"],[4084, 3952, 3881, 3843, 4574, 4570, 4024, 3587, 3665, 3867, 4057, 4510, 4999, 4354, 4130, 4380, 4425, 4595, 1829, 4595, 3500, 2156, 2186],[1176.0, 1249.0, 1225.0, 1213.0, 1299.0, 1297.0, 1183.0, 1166.0, 1126.0, 1129.0, 1126.0, 1178.0, 1159.0, 1120.0, 1129.0, 1105.0, 1127.0, 1194.0, 1172.0, 1229.0, 1180.0, 1278.0, 1270.0],[6.8, 8.7, 10.3, 10.3, 10.2, 10.8, 13.1, 12.7, 13.8, 7.2, 4.4, 4.5, 5.3, 6.5, 6.0, 5.9, 3.5, 2.6, 5.4, 4.6, 8.1, 9.2, 13.5],[74.0, 73.8, 69.5, 71.1, 74.1, 69.4, 65.5, 67.8, 68.8, 72.4, 76.2, 79.8, 77.0, 72.0, 76.2, 80.8, 79.1, 81.2, 51.6, 73.7, 66.5, 57.8, 55.0]);</script>
+</div>
+    </div>
+
+  </div>
+</div>
+
+
+<div style="margin-top:20px;padding:16px;background:#fff;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,0.08)">
+<h3 style="color:#1F3864;margin:0 0 10px">🔋 缺电率（助力车）</h3>
+<p style="font-size:13px;color:#666">6月月均缺电率: <b>0.87%</b></p>
+<table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:8px">
+<thead><tr style="background:#1F3864;color:#fff"><th style="padding:6px">城市</th><th>完成订单</th><th>缺电损失订单</th><th>T-1缺电率</th><th>6月月均</th></tr></thead>
+<tbody>
+<tr style="font-weight:bold;background:#D9E1F2"><td>全市</td><td>1,683,369</td><td>14,700</td><td>-</td><td>0.87%</td></tr>
+</tbody></table>
+</div>
+</div>
+<button class="back-top" onclick="window.scrollTo({top:0,behavior:'smooth'})">↑</button>
+</body>
+</html>
